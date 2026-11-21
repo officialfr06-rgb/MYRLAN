@@ -60755,8 +60755,9 @@ var INITIAL_ORDERS = [
   }
 ];
 var INITIAL_USERS = [
-  { id: "usr-1", name: "Admin Pharmacien", email: "admin@myrlan.fr", role: "admin", password: "admin" },
-  { id: "usr-2", name: "Marie Dupont", email: "marie.dupont@example.com", role: "customer", password: "password" }
+  { id: "usr-1", name: "Administrateur Myrlan", email: "aaa@gmail.com", role: "admin", password: "123456789" },
+  { id: "usr-2", name: "Admin Secondaire", email: "admin2@myrlan.fr", role: "admin", password: "admin" },
+  { id: "usr-3", name: "Marie Dupont", email: "marie.dupont@example.com", role: "customer", password: "password" }
 ];
 function getDatabase() {
   if (!import_fs.default.existsSync(dbFilePath)) {
