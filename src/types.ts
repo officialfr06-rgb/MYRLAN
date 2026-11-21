@@ -97,3 +97,11 @@ export interface UserProfile {
   concerns?: string[];
   avatar?: string;
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'customer';
+}
+

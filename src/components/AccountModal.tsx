@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { X, User, Lock, Mail, KeyRound, UserPlus, LogIn } from 'lucide-react';
+import { X, User, Lock, Mail, KeyRound, UserPlus, LogIn, LogOut, ShieldCheck, Award } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const AccountModal: React.FC = () => {
-  const { userProfile, updateUserProfile, isAccountOpen, setIsAccountOpen, loyalty, showToast, setIsAdminMode } = useShop();
+  const { 
+    userProfile, updateUserProfile, isAccountOpen, setIsAccountOpen, 
+    loyalty, showToast, setIsAdminMode, currentUser, setCurrentUser, logoutUser 
+  } = useShop();
 
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'profile'>('login');
-  const [email, setEmail] = useState('marie.dupont@example.com');
-  const [password, setPassword] = useState('password');
-  const [name, setName] = useState('Marie Dupont');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [skinType, setSkinType] = useState(userProfile.skinType || 'Mixte à sensible');
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
 
   if (!isAccountOpen) return null;
 
@@ -24,30 +26,38 @@ export const AccountModal: React.FC = () => {
       });
       const data = await res.json();
       if (data.success && data.user) {
-        setIsLoggedIn(true);
+        setCurrentUser(data.user);
         if (data.user.role === 'admin') {
           setIsAdminMode(true);
-          showToast('Connexion Administrateur réussie ! Bienvenue.');
+          showToast(`Connexion Administrateur réussie ! Bienvenue ${data.user.name}.`);
         } else {
           setIsAdminMode(false);
           updateUserProfile({ name: data.user.name, email: data.user.email });
-          showToast('Connexion client réussie ! Bienvenue chez Myrlan.');
+          showToast(`Connexion réussie ! Bienvenue ${data.user.name}.`);
         }
         setIsAccountOpen(false);
       } else {
         showToast(data.error || 'Email ou mot de passe incorrect.');
       }
     } catch (err) {
-      // Fallback local check
-      if (email === 'admin@myrlan.fr' && password === 'admin') {
+      // Fallback local check (including aaa@gmail.com / 123456789)
+      if (email === 'aaa@gmail.com' && password === '123456789') {
+        const adminUser = { id: 'usr-1', name: 'Administrateur Myrlan', email: 'aaa@gmail.com', role: 'admin' as const };
+        setCurrentUser(adminUser);
         setIsAdminMode(true);
-        setIsLoggedIn(true);
+        showToast('Connexion Administrateur réussie !');
+        setIsAccountOpen(false);
+      } else if (email === 'admin@myrlan.fr' && password === 'admin') {
+        const adminUser = { id: 'usr-2', name: 'Admin Pharmacien', email: 'admin@myrlan.fr', role: 'admin' as const };
+        setCurrentUser(adminUser);
+        setIsAdminMode(true);
         showToast('Connexion Administrateur réussie !');
         setIsAccountOpen(false);
       } else {
+        const customerUser = { id: `usr-${Date.now()}`, name: name || 'Client Myrlan', email, role: 'customer' as const };
+        setCurrentUser(customerUser);
         setIsAdminMode(false);
-        setIsLoggedIn(true);
-        updateUserProfile({ name: name || 'Client Myrlan', email });
+        updateUserProfile({ name: customerUser.name, email });
         showToast('Connexion client réussie !');
         setIsAccountOpen(false);
       }
@@ -63,17 +73,19 @@ export const AccountModal: React.FC = () => {
         body: JSON.stringify({ name, email, password })
       });
       const data = await res.json();
-      if (data.success) {
-        setIsLoggedIn(true);
+      if (data.success && data.user) {
+        setCurrentUser(data.user);
         setIsAdminMode(false);
         updateUserProfile({ name, email, skinType });
-        showToast('Compte client créé avec succès ! +50 points de fidélité de bienvenue.');
+        showToast('Compte client créé avec succès ! +50 points de fidélité.');
         setIsAccountOpen(false);
       } else {
         showToast(data.error || "Erreur lors de la création du compte.");
       }
     } catch (err) {
-      setIsLoggedIn(true);
+      const newUser = { id: `usr-${Date.now()}`, name, email, role: 'customer' as const };
+      setCurrentUser(newUser);
+      setIsAdminMode(false);
       updateUserProfile({ name, email, skinType });
       showToast('Compte client créé avec succès !');
       setIsAccountOpen(false);
@@ -106,6 +118,9 @@ export const AccountModal: React.FC = () => {
 
   const handleUpdateProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentUser) {
+      setCurrentUser({ ...currentUser, name, email });
+    }
     updateUserProfile({ name, email, skinType });
     showToast('Profil et préférences mis à jour avec succès.');
     setIsAccountOpen(false);
@@ -120,10 +135,9 @@ export const AccountModal: React.FC = () => {
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-sky-300" />
             <h2 className="font-bold text-lg">
-              {authMode === 'login' && 'Connexion Myrlan'}
-              {authMode === 'register' && 'Créer un Compte Client'}
-              {authMode === 'forgot' && 'Mot de passe oublié'}
-              {authMode === 'profile' && 'Mon Profil & Espace Client'}
+              {currentUser ? 'Mon Compte Myrlan' : authMode === 'login' && 'Connexion Myrlan'}
+              {!currentUser && authMode === 'register' && 'Créer un Compte Client'}
+              {!currentUser && authMode === 'forgot' && 'Mot de passe oublié'}
             </h2>
           </div>
           <button 
@@ -134,15 +148,22 @@ export const AccountModal: React.FC = () => {
           </button>
         </div>
 
-        {isLoggedIn && authMode === 'profile' ? (
+        {currentUser ? (
           <div className="p-6 sm:p-8 space-y-4">
             <div className="flex items-center gap-4 p-4 rounded-2xl bg-blue-50 border border-blue-100">
-              <div className="w-12 h-12 rounded-full bg-blue-600 text-white font-black text-lg flex items-center justify-center">
-                {name.charAt(0)}
+              <div className={`w-12 h-12 rounded-2xl text-white font-black text-lg flex items-center justify-center ${currentUser.role === 'admin' ? 'bg-blue-900' : 'bg-blue-600'}`}>
+                {currentUser.name.charAt(0)}
               </div>
-              <div>
-                <h4 className="font-bold text-gray-900 text-sm">{name}</h4>
-                <p className="text-xs text-blue-700 font-medium">Statut : {loyalty.tier} ({loyalty.points} pts)</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bold text-gray-900 text-sm truncate">{currentUser.name}</h4>
+                  {currentUser.role === 'admin' && (
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-900 font-extrabold text-[10px] rounded-full flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" /> Admin
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-blue-700 font-medium truncate">{currentUser.email}</p>
               </div>
             </div>
 
@@ -152,7 +173,7 @@ export const AccountModal: React.FC = () => {
                 <input
                   type="text"
                   required
-                  value={name}
+                  defaultValue={currentUser.name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
                 />
@@ -162,32 +183,34 @@ export const AccountModal: React.FC = () => {
                 <input
                   type="email"
                   required
-                  value={email}
+                  defaultValue={currentUser.email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Type de peau par défaut</label>
-                <select
-                  value={skinType}
-                  onChange={(e) => setSkinType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white"
-                >
-                  <option value="Sèche">Sèche</option>
-                  <option value="Mixte à sensible">Mixte à sensible</option>
-                  <option value="Grasse à imperfections">Grasse à imperfections</option>
-                  <option value="Normale">Normale</option>
-                </select>
-              </div>
+              {currentUser.role === 'customer' && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Type de peau par défaut</label>
+                  <select
+                    value={skinType}
+                    onChange={(e) => setSkinType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white"
+                  >
+                    <option value="Sèche">Sèche</option>
+                    <option value="Mixte à sensible">Mixte à sensible</option>
+                    <option value="Grasse à imperfections">Grasse à imperfections</option>
+                    <option value="Normale">Normale</option>
+                  </select>
+                </div>
+              )}
 
               <div className="pt-4 flex justify-between items-center">
                 <button
                   type="button"
-                  onClick={() => { setIsLoggedIn(false); setAuthMode('login'); }}
-                  className="text-xs text-rose-600 font-bold hover:underline"
+                  onClick={() => { logoutUser(); setIsAccountOpen(false); }}
+                  className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
                 >
-                  Se déconnecter
+                  <LogOut className="w-4 h-4" /> Se déconnecter
                 </button>
                 <div className="flex gap-2">
                   <button

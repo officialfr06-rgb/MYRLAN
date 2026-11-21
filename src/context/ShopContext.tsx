@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { Product, CartItem, Order, ChatMessage, UserProfile, LoyaltyAccount, ShippingAddress, PaymentMethod, ShippingCarrier } from '../types';
+import { Product, CartItem, Order, ChatMessage, UserProfile, LoyaltyAccount, ShippingAddress, PaymentMethod, ShippingCarrier, User } from '../types';
 import { MOCK_PRODUCTS } from '../data/mockProducts';
 
 interface ShopContextType {
@@ -56,6 +56,9 @@ interface ShopContextType {
   sendChatMessage: (text: string, sender?: 'user' | 'bot' | 'pharmacist') => void;
   updateUserProfile: (profile: Partial<UserProfile>) => void;
   showToast: (msg: string) => void;
+  currentUser: User | null;
+  logoutUser: () => void;
+  setCurrentUser: (user: User | null) => void;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
@@ -137,7 +140,36 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   });
 
-  const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('myrlan_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('myrlan_current_user', JSON.stringify(currentUser));
+      if (currentUser.role === 'admin') {
+        setIsAdminMode(true);
+      }
+    } else {
+      localStorage.removeItem('myrlan_current_user');
+    }
+  }, [currentUser]);
+
+  const logoutUser = () => {
+    setCurrentUser(null);
+    setIsAdminMode(false);
+    showToast('Vous avez été déconnecté avec succès.');
+  };
+
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('myrlan_current_user');
+    if (saved) {
+      const u = JSON.parse(saved);
+      return u.role === 'admin';
+    }
+    return false;
+  });
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
   const [selectedTag, setSelectedTag] = useState<string>('Tous');
@@ -553,7 +585,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addProduct,
       sendChatMessage,
       updateUserProfile,
-      showToast
+      showToast,
+      currentUser,
+      logoutUser,
+      setCurrentUser
     }}>
       {children}
     </ShopContext.Provider>
