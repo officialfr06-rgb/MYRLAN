@@ -1,0 +1,240 @@
+{
+  "products": [
+    {
+      "id": "p-1",
+      "name": "Sérum Booster Acide Hyaluronique Pur",
+      "brand": "La Roche-Glow",
+      "category": "Soin Visage",
+      "price": 29.9,
+      "oldPrice": 38,
+      "image": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800",
+      "stock": 24,
+      "description": "Sérum hautement concentré en acide hyaluronique pur de bas et haut poids moléculaire pour une hydratation intense et un effet repulpant immédiat.",
+      "ingredients": [
+        "Aqua",
+        "Sodium Hyaluronate",
+        "Glycerin",
+        "Citric Acid",
+        "Sodium Benzoate"
+      ],
+      "usage": "Appliquer 3 à 4 gouttes matin et soir sur le visage propre avant votre crème habituelle.",
+      "tags": [
+        "Best-Seller",
+        "Bio",
+        "Sans Paraben"
+      ],
+      "volume": "30 ml",
+      "ean": "3401360215891",
+      "form": "Sérum aqueux fluide",
+      "presentation": "Flacon pipette en verre recyclable",
+      "contenance": "30 ml"
+    },
+    {
+      "id": "p-2",
+      "name": "Crème Solaire Anti-Âge SPF 50+",
+      "brand": "Solaire Derm",
+      "category": "Solaire & Corps",
+      "price": 21.5,
+      "oldPrice": 26.9,
+      "image": "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&q=80&w=800",
+      "stock": 42,
+      "description": "Protection solaire très haute tolérance visage et cou. Prévient le photo-vieillissement cutané et l’apparition des taches brunes.",
+      "ingredients": [
+        "Aqua",
+        "Homosalate",
+        "Octisalate",
+        "Niacinamide",
+        "Tocopherol"
+      ],
+      "usage": "Appliquer généreusement avant l’exposition au soleil. Renouveler fréquemment.",
+      "tags": [
+        "Bio",
+        "Testé Dermatologiquement"
+      ],
+      "volume": "50 ml",
+      "ean": "3401328941205",
+      "form": "Crème protectrice invisible",
+      "presentation": "Tube canule pompes 50 ml",
+      "contenance": "50 ml"
+    },
+    {
+      "id": "p-3",
+      "name": "Complément Alimentaire Cheveux & Ongles Kératine",
+      "brand": "NutriPharma",
+      "category": "Compléments",
+      "price": 24.9,
+      "oldPrice": 31,
+      "image": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800",
+      "stock": 18,
+      "description": "Formule renforcée en kératine, zinc, vitamine B6 et biotine pour stimuler la pousse, renforcer la fibre capillaire et durcir les ongles.",
+      "ingredients": [
+        "Kératine hydrolysée",
+        "L-Cystine",
+        "Zinc Bisglycinate",
+        "Biotine (Vitamine B8)"
+      ],
+      "usage": "2 gélules par jour le matin avec un grand verre d’eau au cours du repas.",
+      "tags": [
+        "Vegan",
+        "Sans Gluten",
+        "Best-Seller"
+      ],
+      "volume": "60 gélules",
+      "ean": "3760098123452",
+      "form": "Gélules végétales",
+      "presentation": "Pilulier éco-responsable de 60 gélules",
+      "contenance": "60 gélules"
+    },
+    {
+      "id": "p-4",
+      "name": "Eau Micellaire Apaisante 3-en-1",
+      "brand": "DermAura",
+      "category": "Hygiène & Bain",
+      "price": 14.9,
+      "image": "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=800",
+      "stock": 60,
+      "description": "Nettoie, démaquille et apaise les peaux sensibles du visage et des yeux en un seul geste sans rincer.",
+      "ingredients": [
+        "Aqua",
+        "PEG-6 Caprylic/Capric Glycerides",
+        "Disodium EDTA",
+        "Cetrimonium Bromide"
+      ],
+      "usage": "Imbiber un coton et passer délicatement sur le visage, les yeux et les lèvres.",
+      "tags": [
+        "Hypoallergénique",
+        "Sans Parfum"
+      ],
+      "volume": "400 ml",
+      "ean": "3401509823411",
+      "form": "Solution micellaire limpide",
+      "presentation": "Flacon pompe grand format 400 ml",
+      "contenance": "400 ml"
+    },
+    {
+      "id": "p-5",
+      "name": "Huile Sèche Nourrissante Visage, Corps & Cheveux",
+      "brand": "PharmaBotanica",
+      "category": "Solaire & Corps",
+      "price": 26,
+      "oldPrice": 32,
+      "image": "https://images.unsplash.com/photo-1608248597359-f53835f42629?auto=format&fit=crop&q=80&w=800",
+      "stock": 35,
+      "description": "Enrichie en huiles végétales précieuses (Argan, Amande douce, Macadamia). Nourrit intensément sans laisser de film gras.",
+      "ingredients": [
+        "Helianthus Annuus Seed Oil",
+        "Argania Spinosa Kernel Oil",
+        "Prunus Amygdalus Dulcis Oil",
+        "Tocopherol"
+      ],
+      "usage": "S’utilise toute l’année sur le visage, le corps et les cheveux.",
+      "tags": [
+        "Bio",
+        "99% Naturel"
+      ],
+      "volume": "100 ml",
+      "ean": "3700543219876",
+      "form": "Huile sèche vaporisateur",
+      "presentation": "Flacon spray en verre 100 ml",
+      "contenance": "100 ml"
+    },
+    {
+      "id": "p-6",
+      "name": "Gel Douche Surgras Dermoprotecteur",
+      "brand": "DermAura",
+      "category": "Hygiène & Bain",
+      "price": 9.9,
+      "image": "https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?auto=format&fit=crop&q=80&w=800",
+      "stock": 80,
+      "description": "Nettoie en douceur et protège les peaux sèches et sensibles de toute la famille. pH neutre pour la peau.",
+      "ingredients": [
+        "Aqua",
+        "Sodium Laureth Sulfate",
+        "Glycerin",
+        "Coco-Glucoside",
+        "Citric Acid"
+      ],
+      "usage": "Appliquer sur peau mouillée, faire mousser délicatement puis rincer abondamment.",
+      "tags": [
+        "Familial",
+        "Sans Savon"
+      ],
+      "volume": "500 ml",
+      "ean": "3401109283746",
+      "form": "Gel moussant onctueux",
+      "presentation": "Flacon pompe ergonomique 500 ml",
+      "contenance": "500 ml"
+    }
+  ],
+  "orders": [
+    {
+      "id": "ORD-9842",
+      "date": "2026-11-19 14:20",
+      "items": [
+        {
+          "product": {
+            "id": "p-1",
+            "name": "Sérum Booster Acide Hyaluronique Pur",
+            "brand": "La Roche-Glow",
+            "category": "Soin Visage",
+            "price": 29.9,
+            "oldPrice": 38,
+            "image": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800",
+            "stock": 24,
+            "description": "Sérum hautement concentré en acide hyaluronique pur de bas et haut poids moléculaire pour une hydratation intense et un effet repulpant immédiat.",
+            "ingredients": [
+              "Aqua",
+              "Sodium Hyaluronate",
+              "Glycerin",
+              "Citric Acid",
+              "Sodium Benzoate"
+            ],
+            "usage": "Appliquer 3 à 4 gouttes matin et soir sur le visage propre avant votre crème habituelle.",
+            "tags": [
+              "Best-Seller",
+              "Bio",
+              "Sans Paraben"
+            ],
+            "volume": "30 ml",
+            "ean": "3401360215891",
+            "form": "Sérum aqueux fluide",
+            "presentation": "Flacon pipette en verre recyclable",
+            "contenance": "30 ml"
+          },
+          "quantity": 1
+        }
+      ],
+      "totalAmount": 29.9,
+      "shippingAddress": {
+        "fullName": "Sophie Martin",
+        "email": "sophie.martin@example.com",
+        "phone": "06 12 34 56 78",
+        "address": "15 rue de la République",
+        "city": "Lyon",
+        "postalCode": "69002",
+        "country": "France"
+      },
+      "paymentMethod": "card",
+      "carrier": "colissimo",
+      "status": "Expédié",
+      "trackingNumber": "6A00984223190",
+      "loyaltyPointsEarned": 29
+    }
+  ],
+  "users": [
+    {
+      "id": "usr-1",
+      "name": "Admin Pharmacien",
+      "email": "admin@myrlane.fr",
+      "role": "admin",
+      "password": "admin"
+    },
+    {
+      "id": "usr-2",
+      "name": "Marie Dupont",
+      "email": "marie.dupont@example.com",
+      "role": "customer",
+      "password": "password"
+    }
+  ]
+}
