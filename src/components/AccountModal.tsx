@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, ShieldCheck, Award, Lock, Mail, KeyRound, UserPlus, LogIn } from 'lucide-react';
+import { X, User, Lock, Mail, KeyRound, UserPlus, LogIn } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const AccountModal: React.FC = () => {
@@ -11,23 +11,46 @@ export const AccountModal: React.FC = () => {
   const [name, setName] = useState('Marie Dupont');
   const [skinType, setSkinType] = useState(userProfile.skinType || 'Mixte à sensible');
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [role, setRole] = useState<'customer' | 'admin'>('customer');
 
   if (!isAccountOpen) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email === 'admin@myrlan.fr' || role === 'admin') {
-      setIsAdminMode(true);
-      setIsLoggedIn(true);
-      showToast('Connexion Administrateur réussie ! Bienvenue dans le tableau de bord.');
-      setIsAccountOpen(false);
-    } else {
-      setIsAdminMode(false);
-      setIsLoggedIn(true);
-      updateUserProfile({ name: name || 'Client Myrlan', email });
-      showToast('Connexion client réussie ! Bienvenue chez Myrlan.');
-      setIsAccountOpen(false);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        setIsLoggedIn(true);
+        if (data.user.role === 'admin') {
+          setIsAdminMode(true);
+          showToast('Connexion Administrateur réussie ! Bienvenue.');
+        } else {
+          setIsAdminMode(false);
+          updateUserProfile({ name: data.user.name, email: data.user.email });
+          showToast('Connexion client réussie ! Bienvenue chez Myrlan.');
+        }
+        setIsAccountOpen(false);
+      } else {
+        showToast(data.error || 'Email ou mot de passe incorrect.');
+      }
+    } catch (err) {
+      // Fallback local check
+      if (email === 'admin@myrlan.fr' && password === 'admin') {
+        setIsAdminMode(true);
+        setIsLoggedIn(true);
+        showToast('Connexion Administrateur réussie !');
+        setIsAccountOpen(false);
+      } else {
+        setIsAdminMode(false);
+        setIsLoggedIn(true);
+        updateUserProfile({ name: name || 'Client Myrlan', email });
+        showToast('Connexion client réussie !');
+        setIsAccountOpen(false);
+      }
     }
   };
 
@@ -50,7 +73,6 @@ export const AccountModal: React.FC = () => {
         showToast(data.error || "Erreur lors de la création du compte.");
       }
     } catch (err) {
-      // Fallback local
       setIsLoggedIn(true);
       updateUserProfile({ name, email, skinType });
       showToast('Compte client créé avec succès !');
@@ -71,7 +93,7 @@ export const AccountModal: React.FC = () => {
         body: JSON.stringify({
           to: email,
           subject: 'Réinitialisation de votre mot de passe Myrlan',
-          message: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe sur Myrlan.\nCliquez sur le lien sécurisé suivant pour définir un nouveau mot de passe : https://myrlan.fr/reset-password?email=${encodeURIComponent(email)}\n\nSi vous n'êtes pas à l'origine de cette demande, veuillez ignorer cet e-mail.\n\nL'équipe Myrlan`,
+          message: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe sur Myrlan.\nCliquez sur le lien sécurisé suivant : https://myrlan.fr/reset-password?email=${encodeURIComponent(email)}\n\nL'équipe Myrlan`,
           orderId: 'RESET-PWD'
         })
       });
@@ -112,7 +134,6 @@ export const AccountModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Navigation Tabs if not logged in */}
         {isLoggedIn && authMode === 'profile' ? (
           <div className="p-6 sm:p-8 space-y-4">
             <div className="flex items-center gap-4 p-4 rounded-2xl bg-blue-50 border border-blue-100">
@@ -189,7 +210,7 @@ export const AccountModal: React.FC = () => {
         ) : (
           <div className="p-6 sm:p-8 space-y-6">
             
-            {/* Mode Switcher Tabs */}
+            {/* Mode Switcher Tabs (Client Login / Register only) */}
             <div className="flex bg-gray-100 p-1 rounded-2xl">
               <button
                 type="button"
@@ -203,32 +224,13 @@ export const AccountModal: React.FC = () => {
                 onClick={() => setAuthMode('register')}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${authMode === 'register' ? 'bg-white text-blue-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
               >
-                Créer un compte
+                Créer un compte client
               </button>
             </div>
 
-            {/* LOGIN FORM */}
+            {/* LOGIN FORM (Client & Admin) */}
             {authMode === 'login' && (
               <form onSubmit={handleLogin} className="space-y-4">
-                
-                {/* Role Selector */}
-                <div className="grid grid-cols-2 gap-2 p-1 bg-blue-50/50 rounded-xl border border-blue-100">
-                  <button
-                    type="button"
-                    onClick={() => { setRole('customer'); setEmail('marie.dupont@example.com'); }}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'customer' ? 'bg-blue-600 text-white shadow-xs' : 'text-blue-900 hover:bg-blue-100/50'}`}
-                  >
-                    👤 Client / Patient
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setRole('admin'); setEmail('admin@myrlan.fr'); }}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'admin' ? 'bg-blue-900 text-white shadow-xs' : 'text-blue-950 hover:bg-blue-100/50'}`}
-                  >
-                    🛡️ Administrateur
-                  </button>
-                </div>
-
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Adresse email</label>
                   <div className="relative">
@@ -276,12 +278,12 @@ export const AccountModal: React.FC = () => {
                   type="submit"
                   className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center gap-2"
                 >
-                  <LogIn className="w-4 h-4" /> Se connecter ({role === 'admin' ? 'Admin' : 'Client'})
+                  <LogIn className="w-4 h-4" /> Se connecter
                 </button>
               </form>
             )}
 
-            {/* REGISTER FORM */}
+            {/* REGISTER FORM (Clients Only) */}
             {authMode === 'register' && (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
