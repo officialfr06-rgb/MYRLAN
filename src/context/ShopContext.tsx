@@ -25,6 +25,7 @@ interface ShopContextType {
   isFaqOpen: boolean;
   isLegalOpen: boolean;
   isAccountOpen: boolean;
+  isSidebarDrawerOpen: boolean;
   selectedProductForDetail: Product | null;
   toastMessage: string | null;
   
@@ -41,6 +42,7 @@ interface ShopContextType {
   setIsFaqOpen: (open: boolean) => void;
   setIsLegalOpen: (open: boolean) => void;
   setIsAccountOpen: (open: boolean) => void;
+  setIsSidebarDrawerOpen: (open: boolean) => void;
   setSelectedProductForDetail: (p: Product | null) => void;
   setIsAdminMode: (admin: boolean) => void;
 
@@ -175,6 +177,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedTag, setSelectedTag] = useState<string>('Tous');
 
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState<boolean>(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
   const [isAiAdvisorOpen, setIsAiAdvisorOpen] = useState<boolean>(false);
   const [isLoyaltyOpen, setIsLoyaltyOpen] = useState<boolean>(false);
@@ -557,6 +560,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isFaqOpen,
       isLegalOpen,
       isAccountOpen,
+      isSidebarDrawerOpen,
       selectedProductForDetail,
       toastMessage,
       setSearchQuery,
@@ -572,6 +576,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsFaqOpen,
       setIsLegalOpen,
       setIsAccountOpen,
+      setIsSidebarDrawerOpen,
       setSelectedProductForDetail,
       setIsAdminMode,
       addToCart,

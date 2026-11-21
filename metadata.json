@@ -2,5 +2,7 @@
   "name": "Myrlan - Parapharmacie en Ligne",
   "description": "Site e-commerce de parapharmacie avec catalogue, commandes sécurisées, gestion des stocks en temps réel, tableau de bord admin, programme fidélité et conseiller IA.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

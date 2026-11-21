@@ -216,7 +216,7 @@
       },
       "paymentMethod": "card",
       "carrier": "colissimo",
-      "status": "Expédié",
+      "status": "Livré",
       "trackingNumber": "6A00984223190",
       "loyaltyPointsEarned": 29
     }

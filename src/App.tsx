@@ -25,7 +25,7 @@ import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
 
 const StoreContent: React.FC = () => {
-  const { isAdminMode, selectedProductForDetail, setSelectedProductForDetail, currentUser } = useShop();
+  const { isAdminMode, selectedProductForDetail, setSelectedProductForDetail } = useShop();
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/60 text-gray-900 font-sans antialiased selection:bg-blue-500 selection:text-white">
@@ -34,29 +34,23 @@ const StoreContent: React.FC = () => {
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {isAdminMode ? (
           <AdminDashboard />
+        ) : selectedProductForDetail ? (
+          <ProductPage 
+            product={selectedProductForDetail} 
+            onBack={() => setSelectedProductForDetail(null)} 
+          />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <div className="lg:col-span-1">
-              <SidebarMenu />
-            </div>
-            <div className="lg:col-span-3">
-              {selectedProductForDetail ? (
-                <ProductPage 
-                  product={selectedProductForDetail} 
-                  onBack={() => setSelectedProductForDetail(null)} 
-                />
-              ) : (
-                <>
-                  <HeroBanner />
-                  <ProductCatalog />
-                </>
-              )}
-            </div>
-          </div>
+          <>
+            <HeroBanner />
+            <ProductCatalog />
+          </>
         )}
       </main>
 
       <Footer />
+
+      {/* Floating / Sliding Overlay Sidebar Menu (Never changes site width or dimensions) */}
+      <SidebarMenu />
 
       {/* Overlays & Modals */}
       <CartDrawer />
