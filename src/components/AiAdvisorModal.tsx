@@ -21,7 +21,7 @@ export const AiAdvisorModal: React.FC = () => {
       if (!apiKey) {
         // Fallback simulation if no API key
         setTimeout(() => {
-          setAiResponse(`En tant que pharmacien expert Myrlane, voici votre routine personnalisée pour une peau ${skinType} (${ageGroup}) ciblant ${concern} :
+          setAiResponse(`En tant que pharmacien expert Myrlan, voici votre routine personnalisée pour une peau ${skinType} (${ageGroup}) ciblant ${concern} :
 1. Nettoyage doux : Gel Nettoyant Purifiant matin et soir.
 2. Traitement intense : Sérum Hydratant Acide Hyaluronique Pur.
 3. Protection quotidienne : Crème Solaire SPF 50+.

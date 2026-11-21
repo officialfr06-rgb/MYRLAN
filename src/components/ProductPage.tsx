@@ -154,7 +154,7 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
             {/* Purchase Action Box */}
             <div className="bg-white p-6 sm:p-8 rounded-[32px] border border-gray-200 shadow-xl space-y-6">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">Vendu et expédié par <strong className="text-gray-900">Myrlane Pharmacie</strong></span>
+                <span className="text-gray-500">Vendu et expédié par <strong className="text-gray-900">Myrlan Pharmacie</strong></span>
                 <span className="text-amber-600 font-black">+{Math.floor(product.price)} points fidélité 🏆</span>
               </div>
 
@@ -326,7 +326,7 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
                   <span className="text-amber-400 text-sm">★★★★★</span>
                 </div>
                 <p className="text-xs text-gray-700 leading-relaxed">"Je recommande régulièrement ce produit à mes patients dans le cadre de leur routine quotidienne. Excellente tolérance et résultats visibles."</p>
-                <div className="text-[10px] text-gray-400">Avis vérifié Myrlane Pharma</div>
+                <div className="text-[10px] text-gray-400">Avis vérifié Myrlan Pharma</div>
               </div>
 
               <div className="p-6 rounded-3xl bg-gray-50 border border-gray-200 space-y-3">
@@ -335,7 +335,7 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
                   <span className="text-amber-400 text-sm">★★★★★</span>
                 </div>
                 <p className="text-xs text-gray-700 leading-relaxed">"Colis reçu en 24h chronopost, emballage irréprochable. Le produit correspond exactement à mes attentes."</p>
-                <div className="text-[10px] text-gray-400">Avis vérifié Myrlane Pharma</div>
+                <div className="text-[10px] text-gray-400">Avis vérifié Myrlan Pharma</div>
               </div>
             </div>
           </div>

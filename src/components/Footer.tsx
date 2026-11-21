@@ -24,7 +24,7 @@ export const Footer: React.FC = () => {
         {/* Newsletter box */}
         <div className="bg-gradient-to-r from-blue-900 to-sky-900 rounded-3xl p-8 border border-blue-800/80 flex flex-col lg:flex-row items-center justify-between gap-8">
           <div className="space-y-2 text-center lg:text-left">
-            <h3 className="text-2xl font-black text-white">Rejoignez la communauté Myrlane</h3>
+            <h3 className="text-2xl font-black text-white">Rejoignez la communauté Myrlan</h3>
             <p className="text-blue-200 text-sm">Recevez nos conseils d'experts en parapharmacie, ventes privées et -10% sur votre première commande.</p>
           </div>
           <form onSubmit={handleNewsletter} className="flex w-full lg:w-auto gap-2">
@@ -55,7 +55,7 @@ export const Footer: React.FC = () => {
               <div className="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center text-white">
                 <Store className="w-5 h-5" />
               </div>
-              <span className="text-xl font-black text-white tracking-tight">Myrlane</span>
+              <span className="text-xl font-black text-white tracking-tight">Myrlan</span>
             </div>
             <p className="text-xs text-blue-300 leading-relaxed">
               Votre parapharmacie en ligne agréée. Large sélection de produits de santé, beauté, bio et compléments alimentaires au meilleur prix.
@@ -129,7 +129,7 @@ export const Footer: React.FC = () => {
         {/* Bottom copyright */}
         <div className="pt-8 border-t border-blue-900 flex flex-col sm:flex-row items-center justify-between text-xs text-blue-400 gap-4">
           <div>
-            &copy; 2026 Myrlane. Tous droits réservés • Parapharmacie en ligne.
+            &copy; 2026 Myrlan. Tous droits réservés • Parapharmacie en ligne.
           </div>
           <div className="flex gap-6">
             <button onClick={() => setIsLegalOpen(true)} className="hover:text-white transition-colors">Mentions Légales</button>

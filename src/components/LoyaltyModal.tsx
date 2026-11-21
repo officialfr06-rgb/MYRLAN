@@ -26,7 +26,7 @@ export const LoyaltyModal: React.FC = () => {
         <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-amber-600 to-amber-700 text-white">
           <div className="flex items-center gap-2">
             <Award className="w-6 h-6 text-amber-200" />
-            <h2 className="font-bold text-lg">Club Fidélité Myrlane</h2>
+            <h2 className="font-bold text-lg">Club Fidélité Myrlan</h2>
           </div>
           <button 
             onClick={() => setIsLoyaltyOpen(false)}

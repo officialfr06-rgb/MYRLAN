@@ -11,7 +11,7 @@ export const FaqAdviceModal: React.FC = () => {
 
   const faqs = [
     {
-      q: 'Quels sont les délais de livraison chez Myrlane ?',
+      q: 'Quels sont les délais de livraison chez Myrlan ?',
       a: 'Les commandes sont préparées et expédiées en 24h ouvrées. La livraison standard Colissimo prend 48h à 72h. La livraison Chronopost express est livrée en 24h.'
     },
     {
@@ -20,7 +20,7 @@ export const FaqAdviceModal: React.FC = () => {
     },
     {
       q: 'Les paiements en ligne sont-ils sécurisés ?',
-      a: 'Absolument. Toutes les transactions sur Myrlane sont cryptées via le protocole SSL (Secure Sockets Layer) et gérées par des partenaires de paiement certifiés (CB, Visa, Mastercard, PayPal, Apple Pay).'
+      a: 'Absolument. Toutes les transactions sur Myrlan sont cryptées via le protocole SSL (Secure Sockets Layer) et gérées par des partenaires de paiement certifiés (CB, Visa, Mastercard, PayPal, Apple Pay).'
     },
     {
       q: 'Comment contacter un pharmacien conseil ?',

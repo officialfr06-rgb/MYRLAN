@@ -69,7 +69,7 @@ export const CheckoutModal: React.FC = () => {
         <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-sky-300" />
-            <h2 className="font-bold text-lg">Paiement Sécurisé Myrlane</h2>
+            <h2 className="font-bold text-lg">Paiement Sécurisé Myrlan</h2>
           </div>
           <button 
             onClick={() => setIsCheckoutOpen(false)}
@@ -150,7 +150,7 @@ export const CheckoutModal: React.FC = () => {
                         required={address.isCompany}
                         value={address.companyName || ''}
                         onChange={(e) => setAddress({ ...address, companyName: e.target.value })}
-                        placeholder="ex: Myrlane Pharma SARL"
+                        placeholder="ex: Myrlan Pharma SARL"
                         className="w-full px-3 py-2 bg-white border rounded-xl text-xs"
                       />
                     </div>

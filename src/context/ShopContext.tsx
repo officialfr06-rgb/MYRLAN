@@ -63,22 +63,22 @@ const ShopContext = createContext<ShopContextType | undefined>(undefined);
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load initial state from localStorage or defaults
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('myrlane_products');
+    const saved = localStorage.getItem('myrlan_products');
     return saved ? JSON.parse(saved) : MOCK_PRODUCTS;
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('myrlane_cart');
+    const saved = localStorage.getItem('myrlan_cart');
     return saved ? JSON.parse(saved) : [];
   });
 
   const [wishlist, setWishlist] = useState<string[]>(() => {
-    const saved = localStorage.getItem('myrlane_wishlist');
+    const saved = localStorage.getItem('myrlan_wishlist');
     return saved ? JSON.parse(saved) : [];
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('myrlane_orders');
+    const saved = localStorage.getItem('myrlan_orders');
     return saved ? JSON.parse(saved) : [
       {
         id: 'ORD-9842',
@@ -104,7 +104,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [loyalty, setLoyalty] = useState<LoyaltyAccount>(() => {
-    const saved = localStorage.getItem('myrlane_loyalty');
+    const saved = localStorage.getItem('myrlan_loyalty');
     return saved ? JSON.parse(saved) : {
       points: 120,
       tier: 'Silver',
@@ -116,19 +116,19 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem('myrlane_chat');
+    const saved = localStorage.getItem('myrlan_chat');
     return saved ? JSON.parse(saved) : [
       {
         id: 'msg-1',
         sender: 'pharmacist',
-        text: 'Bonjour ! Je suis Claire, pharmacienne conseil chez Myrlane. Avez-vous une question sur nos produits ou besoin d\'une recommandation pour votre routine ?',
+        text: 'Bonjour ! Je suis Claire, pharmacienne conseil chez Myrlan. Avez-vous une question sur nos produits ou besoin d\'une recommandation pour votre routine ?',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ];
   });
 
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('myrlane_profile');
+    const saved = localStorage.getItem('myrlan_profile');
     return saved ? JSON.parse(saved) : {
       name: 'Marie Dupont',
       email: 'marie.dupont@example.com',
@@ -203,43 +203,43 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Save to localStorage & sync across tabs
   useEffect(() => {
-    localStorage.setItem('myrlane_products', JSON.stringify(products));
+    localStorage.setItem('myrlan_products', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('myrlane_cart', JSON.stringify(cart));
+    localStorage.setItem('myrlan_cart', JSON.stringify(cart));
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('myrlane_wishlist', JSON.stringify(wishlist));
+    localStorage.setItem('myrlan_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
 
   useEffect(() => {
-    localStorage.setItem('myrlane_orders', JSON.stringify(orders));
+    localStorage.setItem('myrlan_orders', JSON.stringify(orders));
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('myrlane_loyalty', JSON.stringify(loyalty));
+    localStorage.setItem('myrlan_loyalty', JSON.stringify(loyalty));
   }, [loyalty]);
 
   useEffect(() => {
-    localStorage.setItem('myrlane_chat', JSON.stringify(chatMessages));
+    localStorage.setItem('myrlan_chat', JSON.stringify(chatMessages));
   }, [chatMessages]);
 
   useEffect(() => {
-    localStorage.setItem('myrlane_profile', JSON.stringify(userProfile));
+    localStorage.setItem('myrlan_profile', JSON.stringify(userProfile));
   }, [userProfile]);
 
   // Storage listener for real-time multi-device / multi-tab sync simulation
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'myrlane_products' && e.newValue) {
+      if (e.key === 'myrlan_products' && e.newValue) {
         setProducts(JSON.parse(e.newValue));
       }
-      if (e.key === 'myrlane_orders' && e.newValue) {
+      if (e.key === 'myrlan_orders' && e.newValue) {
         setOrders(JSON.parse(e.newValue));
       }
-      if (e.key === 'myrlane_cart' && e.newValue) {
+      if (e.key === 'myrlan_cart' && e.newValue) {
         setCart(JSON.parse(e.newValue));
       }
     };
@@ -424,8 +424,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: address.email,
-        subject: `Confirmation de commande ${newOrder.id} - Myrlane`,
-        message: `Bonjour ${address.fullName},\n\nVotre commande ${newOrder.id} d'un montant de ${totalAmount.toFixed(2)}€ a bien été validée et payée via ${paymentMethod}.\nTransporteur : ${carrier}.\nNuméro de suivi : ${newOrder.trackingNumber}.\n\nMerci de votre confiance !\nL'équipe Myrlane`,
+        subject: `Confirmation de commande ${newOrder.id} - Myrlan`,
+        message: `Bonjour ${address.fullName},\n\nVotre commande ${newOrder.id} d'un montant de ${totalAmount.toFixed(2)}€ a bien été validée et payée via ${paymentMethod}.\nTransporteur : ${carrier}.\nNuméro de suivi : ${newOrder.trackingNumber}.\n\nMerci de votre confiance !\nL'équipe Myrlan`,
         orderId: newOrder.id
       })
     }).catch(err => console.log('SMTP email dispatch error:', err));
@@ -453,7 +453,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: 'client@example.com',
-        subject: `Mise à jour de votre commande ${orderId} - Myrlane`,
+        subject: `Mise à jour de votre commande ${orderId} - Myrlan`,
         message: `Le statut de votre commande ${orderId} a été mis à jour : ${status}.`,
         orderId
       })

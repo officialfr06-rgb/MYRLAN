@@ -25,7 +25,7 @@ export const AccountModal: React.FC = () => {
         <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-900 to-sky-900 text-white">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-sky-300" />
-            <h2 className="font-bold text-lg">Mon Compte Myrlane</h2>
+            <h2 className="font-bold text-lg">Mon Compte Myrlan</h2>
           </div>
           <button 
             onClick={() => setIsAccountOpen(false)}

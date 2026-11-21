@@ -60761,7 +60761,7 @@ var INITIAL_ORDERS = [
   }
 ];
 var INITIAL_USERS = [
-  { id: "usr-1", name: "Admin Pharmacien", email: "admin@myrlane.fr", role: "admin", password: "admin" },
+  { id: "usr-1", name: "Admin Pharmacien", email: "admin@myrlan.fr", role: "admin", password: "admin" },
   { id: "usr-2", name: "Marie Dupont", email: "marie.dupont@example.com", role: "customer", password: "password" }
 ];
 function getDatabase() {
@@ -60925,15 +60925,15 @@ async function startServer() {
       console.log(`[SMTP Email Sent to ${to}] Subject: ${subject} | Order: ${orderId}`);
       try {
         await smtpTransporter.sendMail({
-          from: '"Myrlane Parapharmacie" <noreply@myrlane.fr>',
+          from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
           to: to || "client@example.com",
-          subject: subject || "Confirmation de commande Myrlane",
+          subject: subject || "Confirmation de commande Myrlan",
           text: message || "Votre commande a bien \xE9t\xE9 prise en compte.",
           html: `<div style="font-family:Arial,sans-serif;padding:20px;color:#333;">
-            <h2 style="color:#1d4ed8;">Myrlane - Parapharmacie en Ligne</h2>
+            <h2 style="color:#1d4ed8;">Myrlan - Parapharmacie en Ligne</h2>
             <p>${message}</p>
             <hr style="border:none;border-top:1px solid #eee;margin:20px 0;"/>
-            <p style="font-size:12px;color:#666;">Ceci est un email automatique, serveur s\xE9curis\xE9 Myrlane.</p>
+            <p style="font-size:12px;color:#666;">Ceci est un email automatique, serveur s\xE9curis\xE9 Myrlan.</p>
           </div>`
         });
       } catch (smtpErr) {
@@ -60973,7 +60973,7 @@ async function startServer() {
     });
   }
   httpServer.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`Myrlane Server running on http://0.0.0.0:${PORT} (WebSocket Real-Time, Database, Auth & Storage on Server)`);
+    console.log(`Myrlan Server running on http://0.0.0.0:${PORT} (WebSocket Real-Time, Database, Auth & Storage on Server)`);
   });
 }
 startServer();
