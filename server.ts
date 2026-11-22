@@ -446,7 +446,8 @@ async function startServer() {
 
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
-    cors: { origin: '*' }
+    cors: { origin: '*' },
+    destroyUpgrade: false
   });
 
   // Serve static uploaded files safely
@@ -1187,7 +1188,15 @@ async function startServer() {
   // Vite middleware setup
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: false,
+        ws: {
+          server: httpServer,
+          path: '/vite-hmr'
+        }
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);
