@@ -6,21 +6,21 @@ export const HeroBanner: React.FC = () => {
   const { setIsAiAdvisorOpen } = useShop();
 
   return (
-    <div className="bg-gradient-to-br from-blue-900 via-sky-900 to-blue-950 text-white relative overflow-hidden">
+    <div className="bg-gradient-to-br from-blue-900 via-sky-900 to-blue-950 text-white relative overflow-hidden rounded-2xl sm:rounded-3xl">
       {/* Background decorative glows */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute bottom-0 left-1/4 w-80 h-80 bg-sky-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 lg:py-20 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           
-          <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-800/80 border border-blue-600/50 text-blue-200 text-xs font-semibold backdrop-blur-sm">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Nouveau : Votre diagnostic beauté &amp; santé par IA</span>
+          <div className="lg:col-span-7 space-y-5 sm:space-y-6 text-center lg:text-left min-w-0">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-800/80 border border-blue-600/50 text-blue-200 text-[11px] sm:text-xs font-semibold backdrop-blur-sm max-w-full">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+              <span className="truncate">Nouveau : Diagnostic beauté &amp; santé par IA</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
               Votre santé et votre beauté <span className="bg-gradient-to-r from-blue-200 via-sky-200 to-amber-200 bg-clip-text text-transparent">expertes au quotidien</span>
             </h1>
 
@@ -75,7 +75,7 @@ export const HeroBanner: React.FC = () => {
         </div>
 
         {/* Trust Badges Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 pt-12 border-t border-blue-800/80">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 mt-12 sm:mt-16 pt-8 sm:pt-12 border-t border-blue-800/80">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-blue-800/80 flex items-center justify-center text-blue-300 shrink-0">
               <Truck className="w-6 h-6" />

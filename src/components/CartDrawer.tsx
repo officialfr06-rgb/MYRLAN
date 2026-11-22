@@ -1,34 +1,51 @@
 import React, { useState } from 'react';
-import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag } from 'lucide-react';
+import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag, CheckCircle } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const CartDrawer: React.FC = () => {
-  const { cart, isCartOpen, setIsCartOpen, updateCartQuantity, removeFromCart, clearCart, setIsCheckoutOpen } = useShop();
-  const [promoCode, setPromoCode] = useState('');
-  const [promoApplied, setPromoApplied] = useState(false);
+  const {
+    cart,
+    isCartOpen,
+    setIsCartOpen,
+    updateCartQuantity,
+    removeFromCart,
+    setIsCheckoutOpen,
+    appliedPromo,
+    setAppliedPromo,
+    validatePromoCode
+  } = useShop();
+
+  const [promoCodeInput, setPromoCodeInput] = useState('');
   const [promoError, setPromoError] = useState('');
+  const [isValidating, setIsValidating] = useState(false);
 
   if (!isCartOpen) return null;
 
   const subtotal = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
-  const discount = promoApplied ? subtotal * 0.1 : 0;
+  const discount = appliedPromo && subtotal >= appliedPromo.minOrder
+    ? (subtotal * appliedPromo.discountPercent) / 100
+    : 0;
   const shippingFee = subtotal >= 49 || subtotal === 0 ? 0 : 4.90;
-  const total = subtotal - discount + shippingFee;
+  const total = Math.max(0, subtotal - discount + shippingFee);
 
-  const handleApplyPromo = (e: React.FormEvent) => {
+  const handleApplyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (promoCode.trim().toUpperCase() === 'MYRLANE10') {
-      setPromoApplied(true);
-      setPromoError('');
+    setPromoError('');
+    if (!promoCodeInput.trim()) return;
+    setIsValidating(true);
+    const result = await validatePromoCode(promoCodeInput, subtotal);
+    setIsValidating(false);
+    if (!result.success) {
+      setPromoError(result.error || 'Code promo invalide.');
     } else {
-      setPromoError('Code promo invalide. Essayez MYRLANE10');
+      setPromoCodeInput('');
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-        
+
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-blue-900 text-white">
           <div className="flex items-center gap-3">
@@ -40,7 +57,7 @@ export const CartDrawer: React.FC = () => {
               <p className="text-xs text-blue-300">{cart.length} article(s)</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setIsCartOpen(false)}
             className="p-2 text-blue-200 hover:text-white hover:bg-blue-800 rounded-full transition-colors"
           >
@@ -50,12 +67,12 @@ export const CartDrawer: React.FC = () => {
 
         {/* Free Shipping Progress */}
         <div className="bg-blue-50 px-6 py-3 border-b border-blue-100">
-          <div className="flex justify-between text-xs font-semibold text-blue-900 mb-1">
-            <span>{subtotal >= 49 ? '🎉 Livraison gratuite débloquée !' : `Ajoutez ${(49 - subtotal).toFixed(2)} € pour la livraison offerte`}</span>
+          <div className="flex justify-between text-xs font-semibold text-blue-900 mb-1 tabular-nums">
+            <span>{subtotal >= 49 ? 'Livraison gratuite débloquée !' : `Ajoutez ${(49 - subtotal).toFixed(2)} € pour la livraison offerte`}</span>
             <span>{Math.min(100, Math.round((subtotal / 49) * 100))}%</span>
           </div>
           <div className="w-full h-2 bg-blue-200/60 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-blue-600 rounded-full transition-all duration-500"
               style={{ width: `${Math.min(100, (subtotal / 49) * 100)}%` }}
             ></div>
@@ -81,16 +98,17 @@ export const CartDrawer: React.FC = () => {
           ) : (
             cart.map(item => (
               <div key={item.product.id} className="flex gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100 relative group">
-                <img 
-                  src={item.product.image} 
-                  alt={item.product.name} 
+                <img
+                  src={item.product.image}
+                  alt={item.product.name}
+                  referrerPolicy="no-referrer"
                   className="w-20 h-20 object-cover rounded-xl border border-gray-200"
                 />
-                
+
                 <div className="flex-1 space-y-1">
                   <div className="text-[10px] font-bold text-blue-700 uppercase">{item.product.brand}</div>
                   <h4 className="font-bold text-gray-900 text-xs line-clamp-2">{item.product.name}</h4>
-                  <div className="text-sm font-black text-blue-800">{item.product.price.toFixed(2)} €</div>
+                  <div className="text-sm font-black text-blue-800 tabular-nums">{item.product.price.toFixed(2)} €</div>
 
                   <div className="flex items-center justify-between pt-2">
                     <div className="flex items-center border border-gray-200 rounded-lg bg-white overflow-hidden">
@@ -100,7 +118,7 @@ export const CartDrawer: React.FC = () => {
                       >
                         -
                       </button>
-                      <span className="px-3 py-1 font-semibold text-xs text-gray-800">{item.quantity}</span>
+                      <span className="px-3 py-1 font-semibold text-xs text-gray-800 tabular-nums">{item.quantity}</span>
                       <button
                         onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
                         className="px-2.5 py-1 text-gray-600 hover:bg-gray-100 font-bold text-xs"
@@ -126,7 +144,7 @@ export const CartDrawer: React.FC = () => {
         {/* Footer with Checkout */}
         {cart.length > 0 && (
           <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
-            
+
             {/* Promo Code Input */}
             <form onSubmit={handleApplyPromo} className="space-y-2">
               <div className="flex gap-2">
@@ -137,31 +155,45 @@ export const CartDrawer: React.FC = () => {
                   <input
                     type="text"
                     placeholder="Code promo (ex: MYRLANE10)"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs uppercase font-bold text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <button
                   type="submit"
+                  disabled={isValidating}
                   className="px-4 py-2 bg-gray-900 hover:bg-blue-800 text-white font-bold text-xs rounded-xl transition-colors"
                 >
                   Appliquer
                 </button>
               </div>
-              {promoApplied && <p className="text-xs text-blue-600 font-semibold">✓ Code promo appliqué (-10%)</p>}
+              {appliedPromo && (
+                <div className="flex items-center justify-between text-xs text-blue-700 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" /> Code {appliedPromo.code} (-{appliedPromo.discountPercent}%)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAppliedPromo(null)}
+                    className="text-[11px] underline text-gray-500 hover:text-rose-600"
+                  >
+                    Retirer
+                  </button>
+                </div>
+              )}
               {promoError && <p className="text-xs text-rose-500 font-semibold">{promoError}</p>}
             </form>
 
             {/* Calculations */}
-            <div className="space-y-2 text-sm text-gray-600 border-t border-gray-200 pt-3">
+            <div className="space-y-2 text-sm text-gray-600 border-t border-gray-200 pt-3 tabular-nums">
               <div className="flex justify-between">
                 <span>Sous-total</span>
                 <span className="font-bold text-gray-900">{subtotal.toFixed(2)} €</span>
               </div>
-              {promoApplied && (
+              {discount > 0 && appliedPromo && (
                 <div className="flex justify-between text-blue-600 font-medium">
-                  <span>Réduction (10%)</span>
+                  <span>Réduction ({appliedPromo.code})</span>
                   <span>-{discount.toFixed(2)} €</span>
                 </div>
               )}

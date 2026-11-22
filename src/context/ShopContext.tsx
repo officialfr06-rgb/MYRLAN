@@ -1,6 +1,19 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
-import { Product, CartItem, Order, ChatMessage, UserProfile, LoyaltyAccount, ShippingAddress, PaymentMethod, ShippingCarrier, User } from '../types';
+import {
+  Product,
+  CartItem,
+  Order,
+  ChatMessage,
+  UserProfile,
+  LoyaltyAccount,
+  ShippingAddress,
+  PaymentMethod,
+  ShippingCarrier,
+  User,
+  PromoCode,
+  SavedAddress
+} from '../types';
 import { MOCK_PRODUCTS } from '../data/mockProducts';
 
 interface ShopContextType {
@@ -8,6 +21,9 @@ interface ShopContextType {
   cart: CartItem[];
   wishlist: string[];
   orders: Order[];
+  myOrders: Order[];
+  promoCodes: PromoCode[];
+  appliedPromo: PromoCode | null;
   loyalty: LoyaltyAccount;
   chatMessages: ChatMessage[];
   userProfile: UserProfile;
@@ -15,6 +31,9 @@ interface ShopContextType {
   searchQuery: string;
   selectedCategory: string;
   selectedTag: string;
+  selectedBrand: string;
+  currentPath: string;
+  currentSearch: string;
   isCartOpen: boolean;
   isCheckoutOpen: boolean;
   isAiAdvisorOpen: boolean;
@@ -28,10 +47,13 @@ interface ShopContextType {
   isSidebarDrawerOpen: boolean;
   selectedProductForDetail: Product | null;
   toastMessage: string | null;
-  
+
+  navigate: (path: string) => void;
   setSearchQuery: (q: string) => void;
   setSelectedCategory: (c: string) => void;
   setSelectedTag: (t: string) => void;
+  setSelectedBrand: (b: string) => void;
+  setAppliedPromo: (p: PromoCode | null) => void;
   setIsCartOpen: (open: boolean) => void;
   setIsCheckoutOpen: (open: boolean) => void;
   setIsAiAdvisorOpen: (open: boolean) => void;
@@ -51,22 +73,43 @@ interface ShopContextType {
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
   toggleWishlist: (productId: string) => void;
-  createOrder: (address: ShippingAddress, paymentMethod: PaymentMethod, carrier: ShippingCarrier, promoCode?: string) => Order;
-  updateOrderStatus: (orderId: string, status: Order['status']) => void;
-  updateProductStock: (productId: string, newStock: number) => void;
-  addProduct: (product: Omit<Product, 'id' | 'rating' | 'reviewsCount'>) => void;
+  validatePromoCode: (code: string, subtotal: number) => Promise<{ success: boolean; promo?: PromoCode; error?: string }>;
+  createOrder: (
+    address: ShippingAddress,
+    paymentMethod: PaymentMethod,
+    carrier: ShippingCarrier,
+    promoCode?: string
+  ) => Promise<Order>;
+  updateOrderStatus: (orderId: string, status: Order['status']) => Promise<void>;
+  refreshOrders: () => Promise<void>;
+  updateProductStock: (productId: string, newStock: number) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id' | 'rating' | 'reviewsCount'>) => Promise<void>;
+  updateProduct: (productId: string, updates: Partial<Product>) => Promise<boolean>;
+  deleteProduct: (productId: string) => Promise<boolean>;
   sendChatMessage: (text: string, sender?: 'user' | 'bot' | 'pharmacist') => void;
-  updateUserProfile: (profile: Partial<UserProfile>) => void;
+  updateUserProfile: (profile: Partial<UserProfile>, persistServer?: boolean) => Promise<void>;
+  saveAddressesToAccount: (addresses: SavedAddress[]) => Promise<void>;
   showToast: (msg: string) => void;
   currentUser: User | null;
-  logoutUser: () => void;
+  logoutUser: () => Promise<void>;
   setCurrentUser: (user: User | null) => void;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
+function normalizePathname(raw: string): string {
+  if (!raw) return '/';
+  const [pathname] = raw.split('?');
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    return pathname.slice(0, -1);
+  }
+  return pathname || '/';
+}
+
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load initial state from localStorage or defaults
+  const [currentPath, setCurrentPath] = useState<string>(() => normalizePathname(window.location.pathname));
+  const [currentSearch, setCurrentSearch] = useState<string>(() => window.location.search || '');
+
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('myrlan_products');
     return saved ? JSON.parse(saved) : MOCK_PRODUCTS;
@@ -82,31 +125,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('myrlan_orders');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'ORD-9842',
-        date: '2026-11-19 14:20',
-        items: [{ product: MOCK_PRODUCTS[0], quantity: 1 }],
-        totalAmount: 24.90,
-        shippingAddress: {
-          fullName: 'Sophie Martin',
-          email: 'sophie.martin@example.com',
-          phone: '06 12 34 56 78',
-          address: '15 rue de la République',
-          city: 'Lyon',
-          postalCode: '69002',
-          country: 'France'
-        },
-        paymentMethod: 'card',
-        carrier: 'colissimo',
-        status: 'Expédié',
-        trackingNumber: '6A00984223190',
-        loyaltyPointsEarned: 25
-      }
-    ];
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [guestOrders, setGuestOrders] = useState<Order[]>(() => {
+    const saved = localStorage.getItem('myrlan_guest_orders');
+    return saved ? JSON.parse(saved) : [];
   });
+
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([
+    { id: 'promo-1', code: 'MYRLANE10', discountPercent: 10, minOrder: 0, description: '10% sur toute la boutique', active: true }
+  ]);
+  const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
 
   const [loyalty, setLoyalty] = useState<LoyaltyAccount>(() => {
     const saved = localStorage.getItem('myrlan_loyalty');
@@ -135,46 +163,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem('myrlan_profile');
     return saved ? JSON.parse(saved) : {
-      name: 'Marie Dupont',
-      email: 'marie.dupont@example.com',
+      name: '',
+      email: '',
       skinType: 'Mixte à sensible',
-      concerns: ['Hydratation', 'Éclat du teint']
+      concerns: ['Hydratation', 'Éclat du teint'],
+      savedAddresses: []
     };
   });
 
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('myrlan_current_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [currentUser, setCurrentUserState] = useState<User | null>(null);
 
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('myrlan_current_user', JSON.stringify(currentUser));
-      if (currentUser.role === 'admin') {
-        setIsAdminMode(true);
-      }
-    } else {
-      localStorage.removeItem('myrlan_current_user');
-    }
-  }, [currentUser]);
-
-  const logoutUser = () => {
-    setCurrentUser(null);
-    setIsAdminMode(false);
-    showToast('Vous avez été déconnecté avec succès.');
-  };
-
-  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('myrlan_current_user');
-    if (saved) {
-      const u = JSON.parse(saved);
-      return u.role === 'admin';
-    }
-    return false;
-  });
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
   const [selectedTag, setSelectedTag] = useState<string>('Tous');
+  const [selectedBrand, setSelectedBrand] = useState<string>('Toutes');
 
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState<boolean>(false);
@@ -187,29 +189,127 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isFaqOpen, setIsFaqOpen] = useState<boolean>(false);
   const [isLegalOpen, setIsLegalOpen] = useState<boolean>(false);
   const [isAccountOpen, setIsAccountOpen] = useState<boolean>(false);
-  const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Fetch initial products and orders from server database
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  }, []);
+
+  // History API navigation
+  const navigate = useCallback((rawPath: string) => {
+    const [rawPathname, rawSearch] = rawPath.split('?');
+    const cleanPath = normalizePathname(rawPathname);
+    const cleanSearch = rawSearch ? `?${rawSearch}` : '';
+    const fullUrl = `${cleanPath}${cleanSearch}`;
+
+    if (window.location.pathname + window.location.search !== fullUrl) {
+      window.history.pushState({}, '', fullUrl);
+    }
+    setCurrentPath(cleanPath);
+    setCurrentSearch(cleanSearch);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(normalizePathname(window.location.pathname));
+      setCurrentSearch(window.location.search || '');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Derived states synchronized with URL
+  const isAdminMode = currentPath === '/admin';
+  const setIsAdminMode = useCallback((admin: boolean) => {
+    navigate(admin ? '/admin' : '/');
+  }, [navigate]);
+
+  const selectedProductForDetail = useMemo(() => {
+    if (!currentPath.startsWith('/produit/')) return null;
+    const id = decodeURIComponent(currentPath.replace('/produit/', ''));
+    return products.find(p => p.id === id) || null;
+  }, [currentPath, products]);
+
+  const setSelectedProductForDetail = useCallback((p: Product | null) => {
+    if (p) {
+      navigate(`/produit/${encodeURIComponent(p.id)}`);
+    } else if (currentPath.startsWith('/produit/')) {
+      navigate('/');
+    }
+  }, [navigate, currentPath]);
+
+  const refreshOrders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders', { credentials: 'include' });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch (err) {
+      console.warn('Orders fetch error:', err);
+    }
+  }, []);
+
+  const setCurrentUser = useCallback((user: User | null) => {
+    setCurrentUserState(user);
+    if (user) {
+      setUserProfile(prev => ({
+        ...prev,
+        name: user.name,
+        email: user.email,
+        skinType: user.skinType || prev.skinType,
+        concerns: user.concerns || prev.concerns,
+        savedAddresses: user.savedAddresses || prev.savedAddresses || []
+      }));
+    }
+    refreshOrders();
+  }, [refreshOrders]);
+
+  const logoutUser = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {
+      // ignore
+    }
+    setCurrentUserState(null);
+    setOrders([]);
+    if (currentPath === '/admin') {
+      navigate('/');
+    }
+    showToast('Vous avez été déconnecté avec succès.');
+  }, [currentPath, navigate, showToast]);
+
+  // Initial data & authenticated session bootstrap
   useEffect(() => {
     fetch('/api/products')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setProducts(data);
-        }
+        if (Array.isArray(data) && data.length > 0) setProducts(data);
       })
-      .catch(err => console.log('Server products fetch error:', err));
+      .catch(() => {});
 
-    fetch('/api/orders')
+    fetch('/api/promos')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          setOrders(data);
+        if (Array.isArray(data)) setPromoCodes(data);
+      })
+      .catch(() => {});
+
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated && data.user) {
+          setCurrentUser(data.user);
+        } else {
+          setOrders([]);
         }
       })
-      .catch(err => console.log('Server orders fetch error:', err));
-  }, []);
+      .catch(() => {});
+  }, [setCurrentUser]);
 
   // Real-time WebSocket live updates from server
   useEffect(() => {
@@ -219,8 +319,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProducts(updatedProducts);
     });
 
-    socket.on('orders-updated', (updatedOrders: Order[]) => {
-      setOrders(updatedOrders);
+    socket.on('promos-updated', (updatedPromos: PromoCode[]) => {
+      setPromoCodes(updatedPromos);
+    });
+
+    socket.on('orders-updated', () => {
+      refreshOrders();
     });
 
     socket.on('stock-updated', ({ productId, stock }: { productId: string; stock: number }) => {
@@ -229,14 +333,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     socket.on('order-status-updated', ({ orderId, status }: { orderId: string; status: Order['status'] }) => {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+      setGuestOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
     });
 
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [refreshOrders]);
 
-  // Save to localStorage & sync across tabs
   useEffect(() => {
     localStorage.setItem('myrlan_products', JSON.stringify(products));
   }, [products]);
@@ -250,8 +354,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [wishlist]);
 
   useEffect(() => {
-    localStorage.setItem('myrlan_orders', JSON.stringify(orders));
-  }, [orders]);
+    localStorage.setItem('myrlan_guest_orders', JSON.stringify(guestOrders));
+  }, [guestOrders]);
 
   useEffect(() => {
     localStorage.setItem('myrlan_loyalty', JSON.stringify(loyalty));
@@ -265,29 +369,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('myrlan_profile', JSON.stringify(userProfile));
   }, [userProfile]);
 
-  // Storage listener for real-time multi-device / multi-tab sync simulation
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'myrlan_products' && e.newValue) {
-        setProducts(JSON.parse(e.newValue));
+  const myOrders = useMemo(() => {
+    if (currentUser) {
+      if (currentUser.role === 'admin') {
+        const emailLower = currentUser.email.toLowerCase();
+        return orders.filter(
+          o => o.userId === currentUser.id || o.shippingAddress?.email?.toLowerCase() === emailLower
+        );
       }
-      if (e.key === 'myrlan_orders' && e.newValue) {
-        setOrders(JSON.parse(e.newValue));
-      }
-      if (e.key === 'myrlan_cart' && e.newValue) {
-        setCart(JSON.parse(e.newValue));
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3500);
-  };
+      return orders;
+    }
+    return guestOrders;
+  }, [currentUser, orders, guestOrders]);
 
   const addToCart = (product: Product, quantity = 1) => {
     if (product.stock <= 0) {
@@ -298,7 +391,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
         const newQty = Math.min(product.stock, existing.quantity + quantity);
-        return prev.map(item => 
+        return prev.map(item =>
           item.product.id === product.id ? { ...item, quantity: newQty } : item
         );
       }
@@ -321,13 +414,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const maxStock = product ? product.stock : 99;
     const finalQty = Math.min(maxStock, quantity);
 
-    setCart(prev => prev.map(item => 
+    setCart(prev => prev.map(item =>
       item.product.id === productId ? { ...item, quantity: finalQty } : item
     ));
   };
 
   const clearCart = () => {
     setCart([]);
+    setAppliedPromo(null);
   };
 
   const toggleWishlist = (productId: string) => {
@@ -336,25 +430,48 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (exists) {
         showToast('Article retiré de vos favoris.');
         return prev.filter(id => id !== productId);
-      } else {
-        showToast('Article ajouté à vos favoris !');
-        return [...prev, productId];
       }
+      showToast('Article ajouté à vos favoris !');
+      return [...prev, productId];
     });
+  };
+
+  const validatePromoCode = async (code: string, subtotal: number) => {
+    try {
+      const res = await fetch('/api/promos/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, subtotal })
+      });
+      const data = await res.json();
+      if (data.success && data.promo) {
+        setAppliedPromo(data.promo);
+        return { success: true, promo: data.promo as PromoCode };
+      }
+      return { success: false, error: data.error || 'Code promo invalide.' };
+    } catch {
+      return { success: false, error: 'Impossible de vérifier le code promo.' };
+    }
   };
 
   const updateProductStock = async (productId: string, newStock: number) => {
     const validatedStock = Math.max(0, newStock);
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: validatedStock } : p));
     try {
-      await fetch(`/api/products/${productId}/stock`, {
+      const res = await fetch(`/api/products/${productId}/stock`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ stock: validatedStock })
       });
-      showToast('Stock synchronisé sur le serveur en temps réel.');
-    } catch (err) {
-      console.error('Stock sync error:', err);
+      const data = await res.json();
+      if (data.success) {
+        setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: validatedStock } : p));
+        showToast('Stock synchronisé sur le serveur en temps réel.');
+      } else {
+        showToast(data.error || 'Action réservée à l’administrateur.');
+      }
+    } catch {
+      showToast('Erreur réseau lors de la mise à jour du stock.');
     }
   };
 
@@ -363,37 +480,96 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(newProdData)
       });
       const data = await res.json();
       if (data.success && data.product) {
-        setProducts(prev => [data.product, ...prev]);
+        setProducts(prev => {
+          const exists = prev.some(p => p.id === data.product.id);
+          return exists ? prev : [data.product, ...prev];
+        });
         showToast('Nouveau produit enregistré sur le serveur avec succès !');
+      } else {
+        showToast(data.error || 'Action réservée à l’administrateur.');
       }
-    } catch (err) {
-      console.error('Add product error:', err);
-      const newProduct: Product = {
-        ...newProdData,
-        id: `p-${Date.now()}`,
-        rating: 5.0,
-        reviewsCount: 1
-      };
-      setProducts(prev => [newProduct, ...prev]);
-      showToast('Produit ajouté (mode local).');
+    } catch {
+      showToast('Erreur de connexion au serveur.');
     }
   };
 
-  const createOrder = (address: ShippingAddress, paymentMethod: PaymentMethod, carrier: ShippingCarrier, promoCode?: string) => {
+  const updateProduct = async (productId: string, updates: Partial<Product>) => {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(updates)
+      });
+      const data = await res.json();
+      if (data.success && data.product) {
+        setProducts(prev => prev.map(p => p.id === productId ? data.product : p));
+        showToast('Produit mis à jour avec succès.');
+        return true;
+      }
+      showToast(data.error || 'Erreur lors de la modification.');
+      return false;
+    } catch {
+      showToast('Erreur réseau.');
+      return false;
+    }
+  };
+
+  const deleteProduct = async (productId: string) => {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProducts(prev => prev.filter(p => p.id !== productId));
+        showToast('Produit supprimé du catalogue.');
+        return true;
+      }
+      showToast(data.error || 'Erreur lors de la suppression.');
+      return false;
+    } catch {
+      showToast('Erreur réseau.');
+      return false;
+    }
+  };
+
+  const createOrder = async (
+    address: ShippingAddress,
+    paymentMethod: PaymentMethod,
+    carrier: ShippingCarrier,
+    promoCode?: string
+  ): Promise<Order> => {
+    const effectiveCode = promoCode || appliedPromo?.code;
     const subtotal = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
-    const discount = promoCode && promoCode.toUpperCase() === 'MYRLANE10' ? subtotal * 0.1 : 0;
-    const shippingFee = subtotal > 49 ? 0 : 4.90;
-    const totalAmount = Number((subtotal - discount + shippingFee).toFixed(2));
+    const matchingPromo = effectiveCode
+      ? promoCodes.find(p => p.code.toUpperCase() === effectiveCode.toUpperCase() && p.active && subtotal >= p.minOrder)
+      : undefined;
+    const discountAmount = matchingPromo ? Number(((subtotal * matchingPromo.discountPercent) / 100).toFixed(2)) : 0;
+    const shippingFee = carrier === 'click_and_collect' || subtotal >= 49
+      ? 0
+      : carrier === 'chronopost'
+        ? 9.90
+        : carrier === 'mondial_relay'
+          ? 3.90
+          : 4.90;
+    const totalAmount = Number(Math.max(0, subtotal - discountAmount + shippingFee).toFixed(2));
     const pointsEarned = Math.floor(totalAmount);
 
-    const newOrder: Order = {
+    const payload: Order = {
       id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
       date: new Date().toISOString().replace('T', ' ').substring(0, 16),
       items: [...cart],
+      subtotal: Number(subtotal.toFixed(2)),
+      discountAmount,
+      shippingFee,
+      promoCode: matchingPromo?.code,
       totalAmount,
       shippingAddress: address,
       paymentMethod,
@@ -403,34 +579,41 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loyaltyPointsEarned: pointsEarned
     };
 
-    // Update real-time inventory
+    let finalOrder = payload;
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success && data.order) {
+        finalOrder = data.order;
+      }
+    } catch (err) {
+      console.warn('Order sync error:', err);
+    }
+
     setProducts(prev => {
       const updated = [...prev];
-      cart.forEach(cartItem => {
-        const pIndex = updated.findIndex(p => p.id === cartItem.product.id);
-        if (pIndex !== -1) {
-          updated[pIndex] = {
-            ...updated[pIndex],
-            stock: Math.max(0, updated[pIndex].stock - cartItem.quantity)
-          };
+      finalOrder.items.forEach(cartItem => {
+        const idx = updated.findIndex(p => p.id === cartItem.product.id);
+        if (idx !== -1) {
+          updated[idx] = { ...updated[idx], stock: Math.max(0, updated[idx].stock - cartItem.quantity) };
         }
       });
       return updated;
     });
 
-    // Update orders
-    setOrders(prev => [newOrder, ...prev]);
+    if (currentUser) {
+      setOrders(prev => [finalOrder, ...prev.filter(o => o.id !== finalOrder.id)]);
+    } else {
+      setGuestOrders(prev => [finalOrder, ...prev.filter(o => o.id !== finalOrder.id)]);
+    }
 
-    // Save order to server database
-    fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newOrder)
-    }).catch(err => console.log('Order sync error:', err));
-
-    // Update loyalty points
     setLoyalty(prev => {
-      const newPoints = prev.points + pointsEarned;
+      const newPoints = prev.points + finalOrder.loyaltyPointsEarned;
       let newTier: 'Bronze' | 'Silver' | 'Gold' = prev.tier;
       if (newPoints >= 500) newTier = 'Gold';
       else if (newPoints >= 200) newTier = 'Silver';
@@ -442,8 +625,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           {
             id: `h-${Date.now()}`,
             date: new Date().toISOString().split('T')[0],
-            description: `Achat commande ${newOrder.id}`,
-            points: pointsEarned
+            description: `Achat commande ${finalOrder.id}`,
+            points: finalOrder.loyaltyPointsEarned
           },
           ...prev.history
         ]
@@ -453,48 +636,39 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearCart();
     setIsCheckoutOpen(false);
 
-    // Send confirmation email via SMTP API
     fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: address.email,
-        subject: `Confirmation de commande ${newOrder.id} - Myrlan`,
-        message: `Bonjour ${address.fullName},\n\nVotre commande ${newOrder.id} d'un montant de ${totalAmount.toFixed(2)}€ a bien été validée et payée via ${paymentMethod}.\nTransporteur : ${carrier}.\nNuméro de suivi : ${newOrder.trackingNumber}.\n\nMerci de votre confiance !\nL'équipe Myrlan`,
-        orderId: newOrder.id
+        subject: `Confirmation de commande ${finalOrder.id} - Myrlan`,
+        message: `Bonjour ${address.fullName},\n\nVotre commande ${finalOrder.id} d'un montant de ${finalOrder.totalAmount.toFixed(2)} € a bien été validée.\nMode : ${carrier}.\nNuméro de suivi : ${finalOrder.trackingNumber}.\n\nMerci de votre confiance !\nL'équipe Myrlan`,
+        orderId: finalOrder.id
       })
-    }).catch(err => console.log('SMTP email dispatch error:', err));
+    }).catch(() => {});
 
-    showToast(`Commande ${newOrder.id} validée avec succès ! +${pointsEarned} points fidélité.`);
-    return newOrder;
+    showToast(`Commande ${finalOrder.id} validée avec succès ! +${finalOrder.loyaltyPointsEarned} points fidélité.`);
+    return finalOrder;
   };
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-    
     try {
-      await fetch(`/api/orders/${orderId}/status`, {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ status })
       });
-    } catch (err) {
-      console.error('Order status sync error:', err);
+      const data = await res.json();
+      if (data.success) {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+        showToast(`Statut de la commande ${orderId} mis à jour : ${status}`);
+      } else {
+        showToast(data.error || 'Action réservée à l’administrateur.');
+      }
+    } catch {
+      showToast('Erreur réseau lors de la mise à jour.');
     }
-
-    // Send status update email via SMTP API
-    fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: 'client@example.com',
-        subject: `Mise à jour de votre commande ${orderId} - Myrlan`,
-        message: `Le statut de votre commande ${orderId} a été mis à jour : ${status}.`,
-        orderId
-      })
-    }).catch(err => console.log('SMTP status email error:', err));
-
-    showToast(`Statut de la commande ${orderId} mis à jour : ${status}`);
   };
 
   const sendChatMessage = (text: string, sender: 'user' | 'bot' | 'pharmacist' = 'user') => {
@@ -507,16 +681,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setChatMessages(prev => [...prev, newMsg]);
 
     if (sender === 'user') {
-      // Simulate automated pharmacist response after 1 second if no pharmacist answers
       setTimeout(() => {
-        let reply = "Merci pour votre message. Un de nos pharmaciens diplômés vous répond dans les plus brefs délais. En attendant, n'hésitez pas à consulter nos fiches conseils ou notre assistant IA beauté !";
+        let reply = "Merci pour votre message. Un de nos pharmaciens diplômés vous répond dans les plus brefs délais. Vous pouvez également consulter nos fiches conseils sur la page Conseils Santé.";
         const lower = text.toLowerCase();
         if (lower.includes('livraison') || lower.includes('colis')) {
-          reply = "Nos expéditions sont traitées en 24h ouvrées. La livraison standard Colissimo prend 48h à 72h. Vous pouvez suivre votre colis en temps réel depuis l'onglet 'Mes Commandes'.";
+          reply = "Nos expéditions sont traitées en 24h ouvrées. Retrouvez tous nos tarifs et délais sur la page Livraison & Retours.";
         } else if (lower.includes('code') || lower.includes('promo')) {
           reply = "Profitez de 10% de réduction sur votre panier avec le code promo : MYRLANE10 !";
-        } else if (lower.includes('paiement') || lower.includes('carte')) {
-          reply = "Tous nos paiements en ligne sont 100% sécurisés via cryptage SSL (CB, Visa, Mastercard, PayPal, Apple Pay, Google Pay).";
+        } else if (lower.includes('ordonnance')) {
+          reply = "Vous pouvez envoyer votre ordonnance en ligne depuis la rubrique Ordonnance en Ligne pour un retrait Click & Collect ou une livraison.";
         }
 
         setChatMessages(curr => [
@@ -528,73 +701,109 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         ]);
-      }, 1200);
+      }, 1000);
     }
   };
 
-  const updateUserProfile = (profile: Partial<UserProfile>) => {
+  const updateUserProfile = async (profile: Partial<UserProfile>, persistServer = true) => {
     setUserProfile(prev => ({ ...prev, ...profile }));
+    if (persistServer && currentUser) {
+      try {
+        const res = await fetch('/api/account/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(profile)
+        });
+        const data = await res.json();
+        if (data.success && data.user) {
+          setCurrentUserState(data.user);
+        }
+      } catch {
+        // ignore
+      }
+    }
     showToast('Profil et préférences mis à jour avec succès.');
   };
 
+  const saveAddressesToAccount = async (addresses: SavedAddress[]) => {
+    await updateUserProfile({ savedAddresses: addresses }, true);
+  };
+
   return (
-    <ShopContext.Provider value={{
-      products,
-      cart,
-      wishlist,
-      orders,
-      loyalty,
-      chatMessages,
-      userProfile,
-      isAdminMode,
-      searchQuery,
-      selectedCategory,
-      selectedTag,
-      isCartOpen,
-      isCheckoutOpen,
-      isAiAdvisorOpen,
-      isLoyaltyOpen,
-      isChatOpen,
-      isOrderTrackingOpen,
-      isWishlistOpen,
-      isFaqOpen,
-      isLegalOpen,
-      isAccountOpen,
-      isSidebarDrawerOpen,
-      selectedProductForDetail,
-      toastMessage,
-      setSearchQuery,
-      setSelectedCategory,
-      setSelectedTag,
-      setIsCartOpen,
-      setIsCheckoutOpen,
-      setIsAiAdvisorOpen,
-      setIsLoyaltyOpen,
-      setIsChatOpen,
-      setIsOrderTrackingOpen,
-      setIsWishlistOpen,
-      setIsFaqOpen,
-      setIsLegalOpen,
-      setIsAccountOpen,
-      setIsSidebarDrawerOpen,
-      setSelectedProductForDetail,
-      setIsAdminMode,
-      addToCart,
-      removeFromCart,
-      updateCartQuantity,
-      clearCart,
-      toggleWishlist,
-      createOrder,
-      updateOrderStatus,
-      updateProductStock,
-      addProduct,
-      sendChatMessage,
-      updateUserProfile,
-      showToast,
-      currentUser,
-      logoutUser,
-      setCurrentUser
-    }}>
+    <ShopContext.Provider
+      value={{
+        products,
+        cart,
+        wishlist,
+        orders,
+        myOrders,
+        promoCodes,
+        appliedPromo,
+        loyalty,
+        chatMessages,
+        userProfile,
+        isAdminMode,
+        searchQuery,
+        selectedCategory,
+        selectedTag,
+        selectedBrand,
+        currentPath,
+        currentSearch,
+        isCartOpen,
+        isCheckoutOpen,
+        isAiAdvisorOpen,
+        isLoyaltyOpen,
+        isChatOpen,
+        isOrderTrackingOpen,
+        isWishlistOpen,
+        isFaqOpen,
+        isLegalOpen,
+        isAccountOpen,
+        isSidebarDrawerOpen,
+        selectedProductForDetail,
+        toastMessage,
+        navigate,
+        setSearchQuery,
+        setSelectedCategory,
+        setSelectedTag,
+        setSelectedBrand,
+        setAppliedPromo,
+        setIsCartOpen,
+        setIsCheckoutOpen,
+        setIsAiAdvisorOpen,
+        setIsLoyaltyOpen,
+        setIsChatOpen,
+        setIsOrderTrackingOpen,
+        setIsWishlistOpen,
+        setIsFaqOpen,
+        setIsLegalOpen,
+        setIsAccountOpen,
+        setIsSidebarDrawerOpen,
+        setSelectedProductForDetail,
+        setIsAdminMode,
+        addToCart,
+        removeFromCart,
+        updateCartQuantity,
+        clearCart,
+        toggleWishlist,
+        validatePromoCode,
+        createOrder,
+        updateOrderStatus,
+        refreshOrders,
+        updateProductStock,
+        addProduct,
+        updateProduct,
+        deleteProduct,
+        sendChatMessage,
+        updateUserProfile,
+        saveAddressesToAccount,
+        showToast,
+        currentUser,
+        logoutUser,
+        setCurrentUser
+      }}
+    >
       {children}
     </ShopContext.Provider>
   );

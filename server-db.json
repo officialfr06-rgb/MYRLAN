@@ -227,7 +227,7 @@
       "name": "Administrateur Myrlan",
       "email": "aaa@gmail.com",
       "role": "admin",
-      "password": "123456789"
+      "password": "scrypt:44c1810806ee73ee596c11d63f5b7593:1d64900a3954563b186f2c1442894711c94249bf07fe1cf7507e010b6c3cde19f2334b0f50fe22b6b650d2767d20cd8232f5ff8df296bf810b994c3fe62e34c1"
     },
     {
       "id": "usr-2",
@@ -243,5 +243,34 @@
       "role": "customer",
       "password": "password"
     }
-  ]
+  ],
+  "promoCodes": [
+    {
+      "id": "promo-1",
+      "code": "MYRLANE10",
+      "discountPercent": 10,
+      "minOrder": 0,
+      "description": "10% de réduction immédiate sur toute la boutique",
+      "active": true
+    },
+    {
+      "id": "promo-2",
+      "code": "BIENVENUE15",
+      "discountPercent": 15,
+      "minOrder": 60,
+      "description": "15% offerts dès 60 € d’achats",
+      "active": true
+    },
+    {
+      "id": "promo-3",
+      "code": "SANTE20",
+      "discountPercent": 20,
+      "minOrder": 90,
+      "description": "20% sur votre cure bien-être dès 90 €",
+      "active": true
+    }
+  ],
+  "prescriptions": [],
+  "contactMessages": [],
+  "resetTokens": []
 }

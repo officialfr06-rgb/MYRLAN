@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
-import { 
-  Star, ShoppingBag, Heart, Eye, Filter, CheckCircle, 
-  AlertTriangle, Sparkles, ArrowUpDown 
+import {
+  Star, ShoppingBag, Heart, Eye, Filter, CheckCircle,
+  AlertTriangle, Sparkles, ArrowUpDown, X
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { CATEGORIES } from '../data/mockProducts';
-import { Product } from '../types';
 
 export const ProductCatalog: React.FC = () => {
-  const { 
-    products, 
-    searchQuery, 
-    selectedCategory, 
-    setSelectedCategory, 
-    selectedTag, 
+  const {
+    products,
+    searchQuery,
+    selectedCategory,
+    setSelectedCategory,
+    selectedTag,
     setSelectedTag,
+    selectedBrand,
+    setSelectedBrand,
     addToCart,
     wishlist,
     toggleWishlist,
@@ -27,7 +28,7 @@ export const ProductCatalog: React.FC = () => {
 
   // Filter products
   const filteredProducts = products.filter(product => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -36,7 +37,9 @@ export const ProductCatalog: React.FC = () => {
 
     const matchesTag = selectedTag === 'Tous' || product.tags.includes(selectedTag as any);
 
-    return matchesSearch && matchesCategory && matchesTag;
+    const matchesBrand = selectedBrand === 'Toutes' || product.brand === selectedBrand;
+
+    return matchesSearch && matchesCategory && matchesTag && matchesBrand;
   });
 
   // Sort products
@@ -44,19 +47,19 @@ export const ProductCatalog: React.FC = () => {
     if (sortBy === 'price-asc') return a.price - b.price;
     if (sortBy === 'price-desc') return b.price - a.price;
     if (sortBy === 'rating') return b.rating - a.rating;
-    return b.reviewsCount - a.reviewsCount; // popular
+    return b.reviewsCount - a.reviewsCount;
   });
 
   return (
-    <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      
+    <section id="catalog-section" className="max-w-7xl mx-auto px-1 sm:px-6 lg:px-8 py-10 sm:py-16">
+
       {/* Section Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 border-b border-gray-200 pb-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 sm:mb-8 gap-4 border-b border-gray-200 pb-6">
         <div>
           <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
             Catalogue Officiel
           </span>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight mt-2">
+          <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight mt-2">
             Nos Produits &amp; Soins de Parapharmacie
           </h2>
           <p className="text-sm text-gray-500 mt-1">
@@ -65,14 +68,14 @@ export const ProductCatalog: React.FC = () => {
         </div>
 
         {/* Sorting selector */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold text-gray-500 flex items-center gap-1">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-xs font-semibold text-gray-500 flex items-center gap-1 shrink-0">
             <ArrowUpDown className="w-3.5 h-3.5" /> Trier par :
           </span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-800 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-full sm:w-auto px-3 sm:px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-800 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30"
           >
             <option value="popular">Popularité &amp; Avis</option>
             <option value="price-asc">Prix croissant</option>
@@ -83,7 +86,7 @@ export const ProductCatalog: React.FC = () => {
       </div>
 
       {/* Categories Horizontal Filter */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none mb-6">
+      <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-4 scrollbar-none mb-4">
         {CATEGORIES.map(cat => (
           <button
             key={cat}
@@ -99,8 +102,8 @@ export const ProductCatalog: React.FC = () => {
         ))}
       </div>
 
-      {/* Tags Filter */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-6 text-xs">
+      {/* Tags & Active Brand Filter */}
+      <div className="flex flex-wrap items-center gap-2 pb-6 text-xs">
         <span className="text-gray-400 font-semibold flex items-center gap-1 shrink-0">
           <Filter className="w-3.5 h-3.5" /> Filtres :
         </span>
@@ -117,6 +120,15 @@ export const ProductCatalog: React.FC = () => {
             {tag}
           </button>
         ))}
+        {selectedBrand !== 'Toutes' && (
+          <button
+            onClick={() => setSelectedBrand('Toutes')}
+            className="px-3 py-1.5 rounded-lg font-bold bg-blue-900 text-white inline-flex items-center gap-1.5"
+          >
+            <span>Marque : {selectedBrand}</span>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Products Grid */}
@@ -128,7 +140,7 @@ export const ProductCatalog: React.FC = () => {
           <h3 className="text-lg font-bold text-gray-800">Aucun produit trouvé</h3>
           <p className="text-sm text-gray-500 mt-1">Essayez de modifier vos critères de recherche ou réinitialisez les filtres.</p>
           <button
-            onClick={() => { setSelectedCategory('Tous'); setSelectedTag('Tous'); }}
+            onClick={() => { setSelectedCategory('Tous'); setSelectedTag('Tous'); setSelectedBrand('Toutes'); }}
             className="mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-md hover:bg-blue-700 transition-colors"
           >
             Voir tous les produits
@@ -139,30 +151,31 @@ export const ProductCatalog: React.FC = () => {
           {sortedProducts.map(product => {
             const isWishlisted = wishlist.includes(product.id);
             return (
-              <div 
+              <div
                 key={product.id}
                 className="bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group overflow-hidden"
               >
                 <div>
                   {/* Product Image & Badges */}
-                  <div 
+                  <div
                     onClick={() => setSelectedProductForDetail(product)}
                     className="relative aspect-square overflow-hidden bg-gray-50 cursor-pointer"
                   >
-                    <img 
-                      src={product.image} 
-                      alt={product.name} 
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                     />
-                    
-                    {/* Tags overlay */}
-                    <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                      {product.tags.slice(0, 2).map(tag => (
-                        <span key={tag} className="px-2 py-0.5 bg-white/90 backdrop-blur-xs text-blue-800 text-[10px] font-bold rounded-md shadow-xs border border-blue-100">
-                          {tag}
+
+                    {/* Single subtle tag */}
+                    {product.tags.length > 0 && (
+                      <div className="absolute top-3 left-3">
+                        <span className="px-2.5 py-1 bg-white/95 backdrop-blur-xs text-blue-900 text-[10px] font-bold rounded-md shadow-xs border border-blue-100">
+                          {product.tags[0]}
                         </span>
-                      ))}
-                    </div>
+                      </div>
+                    )}
 
                     {/* Wishlist button */}
                     <button
@@ -189,14 +202,14 @@ export const ProductCatalog: React.FC = () => {
                   {/* Product Details */}
                   <div className="p-5 space-y-2">
                     <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{product.brand}</div>
-                    <h3 
+                    <h3
                       onClick={() => setSelectedProductForDetail(product)}
                       className="font-bold text-gray-900 text-sm line-clamp-2 hover:text-blue-700 cursor-pointer transition-colors"
                     >
                       {product.name}
                     </h3>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 tabular-nums">
                       <div className="flex items-center text-amber-500">
                         <Star className="w-3.5 h-3.5 fill-current" />
                         <span className="ml-1 text-xs font-bold text-gray-800">{product.rating}</span>
@@ -224,7 +237,7 @@ export const ProductCatalog: React.FC = () => {
                 </div>
 
                 {/* Price and Add to Cart */}
-                <div className="p-5 pt-0 flex items-center justify-between border-t border-gray-50 mt-2">
+                <div className="p-5 pt-0 flex items-center justify-between border-t border-gray-50 mt-2 tabular-nums">
                   <div>
                     <div className="text-lg font-black text-blue-800">{product.price.toFixed(2)} €</div>
                     {product.oldPrice && (
@@ -236,8 +249,8 @@ export const ProductCatalog: React.FC = () => {
                     onClick={() => addToCart(product)}
                     disabled={product.stock <= 0}
                     className={`p-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-1.5 ${
-                      product.stock > 0 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20 hover:scale-105' 
+                      product.stock > 0
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20 hover:scale-105'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
                     }`}
                     title="Ajouter au panier"

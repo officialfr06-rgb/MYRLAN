@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { X, User, Lock, Mail, KeyRound, UserPlus, LogIn, LogOut, ShieldCheck, Award } from 'lucide-react';
+import { X, User, Lock, Mail, KeyRound, UserPlus, LogIn, LogOut, ShieldCheck, Package, MapPin } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const AccountModal: React.FC = () => {
-  const { 
-    userProfile, updateUserProfile, isAccountOpen, setIsAccountOpen, 
-    loyalty, showToast, setIsAdminMode, currentUser, setCurrentUser, logoutUser 
+  const {
+    userProfile, updateUserProfile, isAccountOpen, setIsAccountOpen,
+    showToast, setIsAdminMode, currentUser, setCurrentUser, logoutUser, navigate
   } = useShop();
 
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'profile'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [skinType, setSkinType] = useState(userProfile.skinType || 'Mixte à sensible');
+  const [editName, setEditName] = useState(currentUser?.name || '');
 
   if (!isAccountOpen) return null;
 
@@ -22,6 +23,7 @@ export const AccountModal: React.FC = () => {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
@@ -32,35 +34,14 @@ export const AccountModal: React.FC = () => {
           showToast(`Connexion Administrateur réussie ! Bienvenue ${data.user.name}.`);
         } else {
           setIsAdminMode(false);
-          updateUserProfile({ name: data.user.name, email: data.user.email });
           showToast(`Connexion réussie ! Bienvenue ${data.user.name}.`);
         }
         setIsAccountOpen(false);
       } else {
         showToast(data.error || 'Email ou mot de passe incorrect.');
       }
-    } catch (err) {
-      // Fallback local check (including aaa@gmail.com / 123456789)
-      if (email === 'aaa@gmail.com' && password === '123456789') {
-        const adminUser = { id: 'usr-1', name: 'Administrateur Myrlan', email: 'aaa@gmail.com', role: 'admin' as const };
-        setCurrentUser(adminUser);
-        setIsAdminMode(true);
-        showToast('Connexion Administrateur réussie !');
-        setIsAccountOpen(false);
-      } else if (email === 'admin@myrlan.fr' && password === 'admin') {
-        const adminUser = { id: 'usr-2', name: 'Admin Pharmacien', email: 'admin@myrlan.fr', role: 'admin' as const };
-        setCurrentUser(adminUser);
-        setIsAdminMode(true);
-        showToast('Connexion Administrateur réussie !');
-        setIsAccountOpen(false);
-      } else {
-        const customerUser = { id: `usr-${Date.now()}`, name: name || 'Client Myrlan', email, role: 'customer' as const };
-        setCurrentUser(customerUser);
-        setIsAdminMode(false);
-        updateUserProfile({ name: customerUser.name, email });
-        showToast('Connexion client réussie !');
-        setIsAccountOpen(false);
-      }
+    } catch {
+      showToast('Erreur de connexion au serveur.');
     }
   };
 
@@ -70,25 +51,20 @@ export const AccountModal: React.FC = () => {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
+        credentials: 'include',
+        body: JSON.stringify({ name, email, password, skinType })
       });
       const data = await res.json();
       if (data.success && data.user) {
         setCurrentUser(data.user);
         setIsAdminMode(false);
-        updateUserProfile({ name, email, skinType });
-        showToast('Compte client créé avec succès ! +50 points de fidélité.');
+        showToast('Compte client créé avec succès !');
         setIsAccountOpen(false);
       } else {
         showToast(data.error || "Erreur lors de la création du compte.");
       }
-    } catch (err) {
-      const newUser = { id: `usr-${Date.now()}`, name, email, role: 'customer' as const };
-      setCurrentUser(newUser);
-      setIsAdminMode(false);
-      updateUserProfile({ name, email, skinType });
-      showToast('Compte client créé avec succès !');
-      setIsAccountOpen(false);
+    } catch {
+      showToast('Erreur de connexion au serveur.');
     }
   };
 
@@ -99,37 +75,29 @@ export const AccountModal: React.FC = () => {
       return;
     }
     try {
-      await fetch('/api/send-email', {
+      const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: email,
-          subject: 'Réinitialisation de votre mot de passe Myrlan',
-          message: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe sur Myrlan.\nCliquez sur le lien sécurisé suivant : https://myrlan.fr/reset-password?email=${encodeURIComponent(email)}\n\nL'équipe Myrlan`,
-          orderId: 'RESET-PWD'
-        })
+        body: JSON.stringify({ email })
       });
-      showToast('Un e-mail de réinitialisation a été envoyé à votre adresse !');
+      const data = await res.json();
+      showToast(data.message || 'Un e-mail de réinitialisation a été envoyé.');
       setAuthMode('login');
-    } catch (err) {
-      showToast('Erreur lors de l’envoi de l’e-mail de réinitialisation.');
+    } catch {
+      showToast('Erreur lors de la demande de réinitialisation.');
     }
   };
 
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentUser) {
-      setCurrentUser({ ...currentUser, name, email });
-    }
-    updateUserProfile({ name, email, skinType });
-    showToast('Profil et préférences mis à jour avec succès.');
+    await updateUserProfile({ name: editName || currentUser?.name || '', skinType }, true);
     setIsAccountOpen(false);
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-900 to-sky-900 text-white">
           <div className="flex items-center gap-2">
@@ -140,7 +108,7 @@ export const AccountModal: React.FC = () => {
               {!currentUser && authMode === 'forgot' && 'Mot de passe oublié'}
             </h2>
           </div>
-          <button 
+          <button
             onClick={() => setIsAccountOpen(false)}
             className="p-2 text-blue-200 hover:text-white rounded-full transition-colors"
           >
@@ -167,6 +135,23 @@ export const AccountModal: React.FC = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setIsAccountOpen(false); navigate('/compte'); }}
+                className="p-2.5 bg-gray-50 hover:bg-blue-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-center gap-1.5"
+              >
+                <MapPin className="w-3.5 h-3.5 text-blue-600" /> Adresses &amp; Profil
+              </button>
+              <button
+                type="button"
+                onClick={() => { setIsAccountOpen(false); navigate('/commandes'); }}
+                className="p-2.5 bg-gray-50 hover:bg-blue-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 flex items-center justify-center gap-1.5"
+              >
+                <Package className="w-3.5 h-3.5 text-blue-600" /> Mes Commandes
+              </button>
+            </div>
+
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Nom complet</label>
@@ -174,17 +159,7 @@ export const AccountModal: React.FC = () => {
                   type="text"
                   required
                   defaultValue={currentUser.name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Adresse email</label>
-                <input
-                  type="email"
-                  required
-                  defaultValue={currentUser.email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEditName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
                 />
               </div>
@@ -232,8 +207,7 @@ export const AccountModal: React.FC = () => {
           </div>
         ) : (
           <div className="p-6 sm:p-8 space-y-6">
-            
-            {/* Mode Switcher Tabs (Client Login / Register only) */}
+
             <div className="flex bg-gray-100 p-1 rounded-2xl">
               <button
                 type="button"
@@ -251,7 +225,6 @@ export const AccountModal: React.FC = () => {
               </button>
             </div>
 
-            {/* LOGIN FORM (Client & Admin) */}
             {authMode === 'login' && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
@@ -306,7 +279,6 @@ export const AccountModal: React.FC = () => {
               </form>
             )}
 
-            {/* REGISTER FORM (Clients Only) */}
             {authMode === 'register' && (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
@@ -334,10 +306,11 @@ export const AccountModal: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mot de passe</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mot de passe (6+ caractères)</label>
                   <input
                     type="password"
                     required
+                    minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
@@ -363,16 +336,15 @@ export const AccountModal: React.FC = () => {
                   type="submit"
                   className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center gap-2"
                 >
-                  <UserPlus className="w-4 h-4" /> Créer mon compte client (+50 pts)
+                  <UserPlus className="w-4 h-4" /> Créer mon compte client
                 </button>
               </form>
             )}
 
-            {/* FORGOT PASSWORD FORM */}
             {authMode === 'forgot' && (
               <form onSubmit={handleForgotPassword} className="space-y-4">
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-900 text-xs">
-                  Entrez votre adresse email ci-dessous. Nous vous enverrons un lien sécurisé par e-mail pour réinitialiser votre mot de passe.
+                  Entrez votre adresse email ci-dessous. Nous vous enverrons un lien sécurisé vers <span className="font-mono">/reset-password</span> pour définir un nouveau mot de passe.
                 </div>
 
                 <div>

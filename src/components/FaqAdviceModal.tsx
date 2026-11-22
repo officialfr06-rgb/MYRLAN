@@ -3,7 +3,7 @@ import { X, HelpCircle, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const FaqAdviceModal: React.FC = () => {
-  const { isFaqOpen, setIsFaqOpen } = useShop();
+  const { isFaqOpen, setIsFaqOpen, navigate } = useShop();
   const [activeTab, setActiveTab] = useState<'faq' | 'advice'>('faq');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
@@ -113,6 +113,21 @@ export const FaqAdviceModal: React.FC = () => {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={() => { setIsFaqOpen(false); navigate('/livraison-retours'); }}
+            className="text-xs font-bold text-blue-700 hover:underline"
+          >
+            Voir les tarifs Livraison &amp; Retours →
+          </button>
+          <button
+            onClick={() => { setIsFaqOpen(false); navigate('/conseils'); }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"
+          >
+            Lire tous les dossiers Conseils Santé
+          </button>
         </div>
 
       </div>

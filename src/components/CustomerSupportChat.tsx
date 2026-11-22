@@ -16,7 +16,7 @@ export const CustomerSupportChat: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-full max-w-sm sm:max-w-md bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[520px] animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:bottom-6 sm:right-6 z-50 sm:w-full sm:max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[min(520px,calc(100dvh-1.5rem))] animate-in slide-in-from-bottom-4 duration-300">
       
       {/* Header */}
       <div className="p-4 bg-blue-900 text-white flex items-center justify-between">
