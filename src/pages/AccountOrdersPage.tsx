@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { SavedAddress, Order } from '../types';
+import { authFetch } from '../utils/authToken';
 
 export const AccountPage: React.FC = () => {
   const {
@@ -111,10 +112,9 @@ export const AccountPage: React.FC = () => {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await authFetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ currentPassword, newPassword })
       });
       const data = await res.json();
@@ -427,10 +427,9 @@ export const OrdersPage: React.FC = () => {
     if (!returnTargetOrder) return;
     setIsSubmittingReturn(true);
     try {
-      const res = await fetch(`/api/orders/${returnTargetOrder.id}/return`, {
+      const res = await authFetch(`/api/orders/${returnTargetOrder.id}/return`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ reason: returnReason, details: returnDetails })
       });
       const data = await res.json();

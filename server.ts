@@ -15,10 +15,14 @@ dotenv.config();
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_COOKIE_NAME = 'myrlan_session';
 
-// Ensure uploads directory exists on server
+// Ensure uploads and private prescriptions directories exist on server
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const prescriptionsDir = path.resolve(process.cwd(), 'private-prescriptions');
+if (!fs.existsSync(prescriptionsDir)) {
+  fs.mkdirSync(prescriptionsDir, { recursive: true });
 }
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -36,6 +40,18 @@ const storage = multer.diskStorage({
   }
 });
 
+const prescriptionStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, prescriptionsDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '');
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'].includes(ext) ? ext : '.pdf';
+    const uniqueSuffix = `rx-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    cb(null, `${uniqueSuffix}${safeExt}`);
+  }
+});
+
 const uploadImage = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -49,7 +65,7 @@ const uploadImage = multer({
 });
 
 const uploadPrescription = multer({
-  storage,
+  storage: prescriptionStorage,
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (PRESCRIPTION_MIME_TYPES.has(file.mimetype)) {
@@ -93,12 +109,14 @@ interface AuthPayload {
   id: string;
   email: string;
   role: 'admin' | 'customer';
+  epoch?: number;
   exp: number;
 }
 
-function signSessionToken(payload: Omit<AuthPayload, 'exp'>): string {
+function signSessionToken(payload: Omit<AuthPayload, 'exp'>, epoch = 1): string {
   const fullPayload: AuthPayload = {
     ...payload,
+    epoch,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000
   };
   const data = Buffer.from(JSON.stringify(fullPayload)).toString('base64url');
@@ -106,7 +124,7 @@ function signSessionToken(payload: Omit<AuthPayload, 'exp'>): string {
   return `${data}.${sig}`;
 }
 
-function verifySessionToken(token: string): AuthPayload | null {
+function verifySessionToken(token: string, expectedEpoch?: number): AuthPayload | null {
   try {
     const [data, sig] = token.split('.');
     if (!data || !sig) return null;
@@ -118,6 +136,7 @@ function verifySessionToken(token: string): AuthPayload | null {
     }
     const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf-8')) as AuthPayload;
     if (!payload.exp || payload.exp < Date.now()) return null;
+    if (expectedEpoch !== undefined && Number(payload.epoch || 1) < expectedEpoch) return null;
     return payload;
   } catch {
     return null;
@@ -359,6 +378,142 @@ const INITIAL_PROMOS = [
   }
 ];
 
+const DEFAULT_ROBOTS_TXT = `User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /compte
+Disallow: /commandes
+Disallow: /reset-password
+Disallow: /api/
+
+Sitemap: {{SITEMAP_URL}}`;
+
+const DEFAULT_WEBMASTER_CONFIG = {
+  siteTitle: 'Myrlan - Parapharmacie & Soins en Ligne',
+  siteDescription: 'Votre parapharmacie en ligne de confiance : soins dermo-cosmétiques, compléments alimentaires, conseils de pharmaciens et Click & Collect.',
+  canonicalBaseUrl: '',
+  ogImageUrl: '',
+  googleSiteVerification: '',
+  bingSiteVerification: '',
+  gaMeasurementId: '',
+  robotsTxt: DEFAULT_ROBOTS_TXT,
+  sitemapIncludeProducts: true,
+  sitemapChangeFreq: 'weekly',
+  enablePharmacyJsonLd: true,
+  enableProductJsonLd: true,
+  redirects: [],
+  updatedAt: new Date().toISOString().split('T')[0]
+};
+
+const PUBLIC_STOREFRONT_ROUTES = [
+  { path: '/', label: 'Accueil & Catalogue', priority: '1.0', changefreq: 'daily' },
+  { path: '/diagnostic', label: 'Diagnostic Peau & Santé', priority: '0.9', changefreq: 'weekly' },
+  { path: '/rendez-vous', label: 'Rendez-vous Officinal', priority: '0.9', changefreq: 'weekly' },
+  { path: '/marques', label: 'Nos Marques', priority: '0.8', changefreq: 'weekly' },
+  { path: '/promotions', label: 'Promotions', priority: '0.8', changefreq: 'daily' },
+  { path: '/ordonnance', label: 'Ordonnance en ligne', priority: '0.8', changefreq: 'weekly' },
+  { path: '/conseils', label: 'Conseils Santé', priority: '0.8', changefreq: 'weekly' },
+  { path: '/a-propos', label: 'L’Officine & Agréments', priority: '0.7', changefreq: 'monthly' },
+  { path: '/contact', label: 'Contact & Officine', priority: '0.7', changefreq: 'monthly' },
+  { path: '/cgv', label: 'CGV', priority: '0.4', changefreq: 'yearly' },
+  { path: '/livraison-retours', label: 'Livraison & Retours', priority: '0.5', changefreq: 'monthly' },
+  { path: '/confidentialite', label: 'Politique de confidentialité', priority: '0.4', changefreq: 'yearly' },
+  { path: '/mentions-legales', label: 'Mentions légales', priority: '0.4', changefreq: 'yearly' }
+];
+
+const APPOINTMENT_SERVICES: Record<string, { label: string; durationMinutes: number }> = {
+  vaccination: { label: 'Vaccination Officinale (Grippe, COVID, Rappel)', durationMinutes: 15 },
+  trod_angine: { label: 'Test Rapide Angine (TROD) ou COVID', durationMinutes: 15 },
+  bilan_medication: { label: 'Bilan Partagé de Médication', durationMinutes: 30 },
+  conseil_dermo: { label: 'Consultation Dermo-Cosmétique Sur-Mesure', durationMinutes: 20 },
+  suivi_maternite: { label: 'Accompagnement Maternité & Nourrisson', durationMinutes: 20 }
+};
+
+const APPOINTMENT_TIME_SLOTS = [
+  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
+];
+
+function escapeXml(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function normalizeInternalPath(raw: string): string | null {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return null;
+  const [withoutQuery] = trimmed.split(/[?#]/);
+  if (!withoutQuery) return '/';
+  if (withoutQuery.length > 1 && withoutQuery.endsWith('/')) {
+    return withoutQuery.slice(0, -1);
+  }
+  return withoutQuery;
+}
+
+function resolveBaseUrl(req: Request, webmaster: any): string {
+  const configured = String(webmaster?.canonicalBaseUrl || '').trim().replace(/\/+$/, '');
+  if (/^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/.test(configured)) {
+    return configured;
+  }
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/+$/, '');
+  }
+  const protoHeader = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+  const hostHeader = String(req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000').split(',')[0].trim();
+  return `${protoHeader}://${hostHeader}`;
+}
+
+function buildSitemapXml(db: any, baseUrl: string): string {
+  const wm = db.webmaster || DEFAULT_WEBMASTER_CONFIG;
+  const today = new Date().toISOString().split('T')[0];
+  const lastMod = wm.updatedAt || today;
+  const productFreq = ['daily', 'weekly', 'monthly'].includes(wm.sitemapChangeFreq) ? wm.sitemapChangeFreq : 'weekly';
+
+  const urls: { loc: string; lastmod: string; changefreq: string; priority: string }[] = PUBLIC_STOREFRONT_ROUTES.map(r => ({
+    loc: `${baseUrl}${r.path === '/' ? '/' : r.path}`,
+    lastmod: lastMod,
+    changefreq: r.changefreq,
+    priority: r.priority
+  }));
+
+  if (wm.sitemapIncludeProducts !== false && Array.isArray(db.products)) {
+    for (const p of db.products) {
+      if (!p?.id) continue;
+      urls.push({
+        loc: `${baseUrl}/produit/${encodeURIComponent(String(p.id))}`,
+        lastmod: lastMod,
+        changefreq: productFreq,
+        priority: '0.9'
+      });
+    }
+  }
+
+  const entries = urls.map(u => `  <url>
+    <loc>${escapeXml(u.loc)}</loc>
+    <lastmod>${escapeXml(u.lastmod)}</lastmod>
+    <changefreq>${escapeXml(u.changefreq)}</changefreq>
+    <priority>${escapeXml(u.priority)}</priority>
+  </url>`).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries}
+</urlset>`;
+}
+
+function buildRobotsTxt(db: any, baseUrl: string): string {
+  const raw = String(db.webmaster?.robotsTxt || DEFAULT_ROBOTS_TXT);
+  const sitemapUrl = `${baseUrl}/sitemap.xml`;
+  if (raw.includes('{{SITEMAP_URL}}')) {
+    return raw.replace(/\{\{SITEMAP_URL\}\}/g, sitemapUrl);
+  }
+  return raw;
+}
+
 function getDatabase() {
   if (!fs.existsSync(dbFilePath)) {
     const initialDb = {
@@ -368,6 +523,17 @@ function getDatabase() {
       promoCodes: INITIAL_PROMOS,
       prescriptions: [],
       contactMessages: [],
+      chatSessions: [],
+      appointments: [],
+      securityLogs: [],
+      securityConfig: {
+        tokenEpoch: 1,
+        maxCodGuestAmount: 250,
+        maxOrderQtyPerItem: 10,
+        maxOrderTotalItems: 30,
+        officialDomain: ''
+      },
+      webmaster: { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] },
       resetTokens: []
     };
     fs.writeFileSync(dbFilePath, JSON.stringify(initialDb, null, 2));
@@ -383,6 +549,29 @@ function getDatabase() {
     if (!Array.isArray(parsed.promoCodes)) { parsed.promoCodes = INITIAL_PROMOS; dirty = true; }
     if (!Array.isArray(parsed.prescriptions)) { parsed.prescriptions = []; dirty = true; }
     if (!Array.isArray(parsed.contactMessages)) { parsed.contactMessages = []; dirty = true; }
+    if (!Array.isArray(parsed.chatSessions)) { parsed.chatSessions = []; dirty = true; }
+    if (!Array.isArray(parsed.appointments)) { parsed.appointments = []; dirty = true; }
+    if (!Array.isArray(parsed.securityLogs)) { parsed.securityLogs = []; dirty = true; }
+    if (!parsed.securityConfig || typeof parsed.securityConfig !== 'object') {
+      parsed.securityConfig = {
+        tokenEpoch: 1,
+        maxCodGuestAmount: 250,
+        maxOrderQtyPerItem: 10,
+        maxOrderTotalItems: 30,
+        officialDomain: ''
+      };
+      dirty = true;
+    }
+    if (!parsed.webmaster || typeof parsed.webmaster !== 'object') {
+      parsed.webmaster = { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] };
+      dirty = true;
+    } else {
+      parsed.webmaster = {
+        ...DEFAULT_WEBMASTER_CONFIG,
+        ...parsed.webmaster,
+        redirects: Array.isArray(parsed.webmaster.redirects) ? parsed.webmaster.redirects : []
+      };
+    }
     if (!Array.isArray(parsed.resetTokens)) { parsed.resetTokens = []; dirty = true; }
     if (dirty) saveDatabase(parsed);
     return parsed;
@@ -394,6 +583,17 @@ function getDatabase() {
       promoCodes: INITIAL_PROMOS,
       prescriptions: [],
       contactMessages: [],
+      chatSessions: [],
+      appointments: [],
+      securityLogs: [],
+      securityConfig: {
+        tokenEpoch: 1,
+        maxCodGuestAmount: 250,
+        maxOrderQtyPerItem: 10,
+        maxOrderTotalItems: 30,
+        officialDomain: ''
+      },
+      webmaster: { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] },
       resetTokens: []
     };
   }
@@ -402,6 +602,112 @@ function getDatabase() {
 function saveDatabase(db: any) {
   fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
 }
+
+// ------------------------------------------------------------------
+// Security Engine: Rate Limiting, Brute-Force Guard & Audit Trail
+// ------------------------------------------------------------------
+interface RateEntry {
+  scope: string;
+  ip: string;
+  count: number;
+  resetAt: number;
+  blockedUntil: number;
+}
+
+const securityRateMap = new Map<string, RateEntry>();
+
+function getClientIp(req: Request): string {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function recordSecurityEvent(
+  db: any,
+  entry: {
+    category: 'auth' | 'anti_sabotage' | 'medical_privacy' | 'admin' | 'phishing_guard';
+    severity: 'info' | 'warning' | 'critical';
+    event: string;
+    detail: string;
+    actor: string;
+    ip: string;
+  }
+) {
+  if (!Array.isArray(db.securityLogs)) db.securityLogs = [];
+  db.securityLogs.unshift({
+    id: `sec-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
+    timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    ...entry
+  });
+  if (db.securityLogs.length > 200) {
+    db.securityLogs = db.securityLogs.slice(0, 200);
+  }
+}
+
+function checkRateLimit(
+  key: string,
+  scope: string,
+  ip: string,
+  maxAttempts: number,
+  windowMs: number,
+  blockMs: number,
+  incrementNow = true
+): { allowed: boolean; remainingMs: number; count: number } {
+  const now = Date.now();
+  let rec = securityRateMap.get(key);
+  if (rec && rec.blockedUntil > now) {
+    return { allowed: false, remainingMs: rec.blockedUntil - now, count: rec.count };
+  }
+  if (!rec || rec.resetAt <= now) {
+    rec = { scope, ip, count: 0, resetAt: now + windowMs, blockedUntil: 0 };
+  }
+  if (incrementNow) {
+    rec.count += 1;
+    if (rec.count > maxAttempts) {
+      rec.blockedUntil = now + blockMs;
+      securityRateMap.set(key, rec);
+      return { allowed: false, remainingMs: blockMs, count: rec.count };
+    }
+  }
+  securityRateMap.set(key, rec);
+  return { allowed: true, remainingMs: 0, count: rec.count };
+}
+
+function recordAuthFailure(key: string, ip: string, maxFails = 5, windowMs = 15 * 60 * 1000, blockMs = 15 * 60 * 1000) {
+  const now = Date.now();
+  let rec = securityRateMap.get(key);
+  if (!rec || rec.resetAt <= now) {
+    rec = { scope: 'auth_login', ip, count: 0, resetAt: now + windowMs, blockedUntil: 0 };
+  }
+  rec.count += 1;
+  if (rec.count >= maxFails) {
+    rec.blockedUntil = now + blockMs;
+  }
+  securityRateMap.set(key, rec);
+  return rec;
+}
+
+function clearRateKey(key: string) {
+  securityRateMap.delete(key);
+}
+
+function isAllowedCorsOrigin(origin: string | undefined, canonicalBaseUrl?: string): boolean {
+  if (!origin) return true;
+  if (
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) ||
+    /^https:\/\/[a-z0-9-]+\.[a-z0-9.-]*(run\.app|aistudio\.google\.com|web\.app|firebaseapp\.com)$/i.test(origin)
+  ) {
+    return true;
+  }
+  if (canonicalBaseUrl && origin.toLowerCase() === canonicalBaseUrl.toLowerCase()) {
+    return true;
+  }
+  if (process.env.APP_URL && origin.toLowerCase() === process.env.APP_URL.replace(/\/+$/, '').toLowerCase()) {
+    return true;
+  }
+  return false;
+}
+
+const WEAK_PASSWORDS = ['123456', '123456789', 'admin', 'password', 'azerty', 'myrlan'];
 
 interface AuthedRequest extends Request {
   authUser?: AuthPayload;
@@ -413,13 +719,25 @@ function extractAuth(req: AuthedRequest): AuthPayload | null {
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
   const token = bearerToken || cookies[SESSION_COOKIE_NAME];
   if (!token) return null;
-  return verifySessionToken(token);
+  const db = getDatabase();
+  const epoch = Number(db.securityConfig?.tokenEpoch || 1);
+  return verifySessionToken(token, epoch);
 }
 
 function attachAuth(req: AuthedRequest, _res: Response, next: NextFunction) {
   const payload = extractAuth(req);
   if (payload) req.authUser = payload;
   next();
+}
+
+function getSessionCookieOptions(req: Request) {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  return {
+    httpOnly: true,
+    sameSite: (isHttps ? 'none' : 'lax') as 'none' | 'lax',
+    secure: Boolean(isHttps),
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  };
 }
 
 function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
@@ -441,17 +759,56 @@ function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction) {
 
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+
+  // Security Response Headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https://www.google-analytics.com https://region1.google-analytics.com; frame-src 'self' blob:; object-src 'self' blob:; frame-ancestors 'self' https://*.google.com https://*.aistudio.google.com https://*.run.app;"
+    );
+    next();
+  });
+
   app.use(express.json({ limit: '2mb' }));
   app.use(attachAuth);
 
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
-    cors: { origin: '*' },
+    cors: {
+      origin: (origin, callback) => {
+        const db = getDatabase();
+        if (isAllowedCorsOrigin(origin, db.webmaster?.canonicalBaseUrl)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Origine non autorisée'));
+        }
+      },
+      credentials: true
+    },
     destroyUpgrade: false
   });
 
-  // Serve static uploaded files safely
-  app.use('/uploads', express.static(uploadsDir, { dotfiles: 'deny' }));
+  // Protect legacy prescription files inside /uploads and serve product images safely
+  app.use('/uploads', (req, res, next) => {
+    const requestedFile = path.basename(req.path || '');
+    if (requestedFile.startsWith('rx-')) {
+      return res.status(403).json({ success: false, error: 'Accès direct interdit aux ordonnances médicales.' });
+    }
+    const db = getDatabase();
+    const isPrescriptionAsset = (db.prescriptions || []).some(
+      (rx: any) => typeof rx.fileUrl === 'string' && rx.fileUrl.endsWith(`/${requestedFile}`)
+    );
+    if (isPrescriptionAsset) {
+      return res.status(403).json({ success: false, error: 'Accès authentifié requis pour consulter une ordonnance.' });
+    }
+    next();
+  }, express.static(uploadsDir, { dotfiles: 'deny' }));
 
   const PORT = process.env.PORT || 3000;
   const hasAuth = process.env.SMTP_USER && process.env.SMTP_PASS;
@@ -689,26 +1046,120 @@ async function startServer() {
   });
 
   app.post('/api/orders', (req: AuthedRequest, res) => {
+    const ip = getClientIp(req);
+    const incoming = req.body || {};
     const db = getDatabase();
-    const incoming = req.body;
+
+    // Anti-bot honeypot check
+    if (incoming.website && String(incoming.website).trim() !== '') {
+      recordSecurityEvent(db, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'BOT_HONEYPOT',
+        detail: 'Soumission automatisée détectée et bloquée sur le tunnel de commande.',
+        actor: req.authUser?.email || 'Visiteur',
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({ success: false, error: 'Validation de sécurité échouée.' });
+    }
+
+    // Order flood protection (except authenticated admins)
+    if (req.authUser?.role !== 'admin') {
+      const rl = checkRateLimit(`orders:${ip}`, 'orders', ip, 6, 15 * 60 * 1000, 15 * 60 * 1000);
+      if (!rl.allowed) {
+        recordSecurityEvent(db, {
+          category: 'anti_sabotage',
+          severity: 'critical',
+          event: 'ORDER_FLOOD_BLOCKED',
+          detail: 'Trop de tentatives de commande rapprochées depuis la même adresse.',
+          actor: req.authUser?.email || 'Visiteur',
+          ip
+        });
+        saveDatabase(db);
+        return res.status(429).json({
+          success: false,
+          error: 'Trop de commandes envoyées en peu de temps. Réessayez dans quelques minutes.'
+        });
+      }
+    }
+
     if (!incoming || !Array.isArray(incoming.items) || incoming.items.length === 0) {
       return res.status(400).json({ success: false, error: 'Le panier est vide.' });
     }
 
-    // Recompute prices server-side from authoritative catalog
+    const secCfg = db.securityConfig || { maxCodGuestAmount: 250, maxOrderQtyPerItem: 10, maxOrderTotalItems: 30 };
+    const maxPerItem = Number(secCfg.maxOrderQtyPerItem) || 10;
+    const maxTotalUnits = Number(secCfg.maxOrderTotalItems) || 30;
+    const requestedUnits = incoming.items.reduce((s: number, it: any) => s + Math.max(1, Number(it?.quantity) || 1), 0);
+    if (requestedUnits > maxTotalUnits) {
+      recordSecurityEvent(db, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'ORDER_QTY_GUARD',
+        detail: `Tentative de commande excessive (${requestedUnits} unités > plafond ${maxTotalUnits}).`,
+        actor: req.authUser?.email || String(incoming.shippingAddress?.email || 'Visiteur'),
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({
+        success: false,
+        error: `Par sécurité contre les achats abusifs, le total est limité à ${maxTotalUnits} unités par commande.`
+      });
+    }
+
+    // Recompute prices server-side from authoritative catalog without draining stock before final validation
     let serverSubtotal = 0;
-    const normalizedItems = [];
+    const normalizedItems: { product: any; quantity: number }[] = [];
     for (const cartItem of incoming.items) {
       const prod = db.products.find((p: any) => p.id === cartItem.product?.id);
-      if (!prod) continue;
-      const qty = Math.max(1, Math.min(prod.stock, Number(cartItem.quantity) || 1));
+      if (!prod || prod.stock <= 0) continue;
+      const requestedQty = Math.max(1, Number(cartItem.quantity) || 1);
+      if (requestedQty > maxPerItem) {
+        recordSecurityEvent(db, {
+          category: 'anti_sabotage',
+          severity: 'warning',
+          event: 'ORDER_ITEM_CAP',
+          detail: `Quantité abusive (${requestedQty}) demandée pour ${prod.name}.`,
+          actor: req.authUser?.email || 'Visiteur',
+          ip
+        });
+        saveDatabase(db);
+        return res.status(400).json({
+          success: false,
+          error: `Maximum ${maxPerItem} unité(s) autorisées par produit (${prod.name}).`
+        });
+      }
+      const qty = Math.min(prod.stock, requestedQty);
       serverSubtotal += prod.price * qty;
       normalizedItems.push({ product: prod, quantity: qty });
-      prod.stock = Math.max(0, prod.stock - qty);
     }
 
     if (normalizedItems.length === 0) {
-      return res.status(400).json({ success: false, error: 'Aucun produit valide dans la commande.' });
+      return res.status(400).json({ success: false, error: 'Aucun produit valide ou en stock dans la commande.' });
+    }
+
+    // Guest COD cap check (anti-stock-drain via fake Cash-On-Delivery orders)
+    const maxCodGuest = Number(secCfg.maxCodGuestAmount) || 250;
+    if ((incoming.paymentMethod || 'card') === 'cod' && !req.authUser && serverSubtotal > maxCodGuest) {
+      recordSecurityEvent(db, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'COD_GUEST_LIMIT',
+        detail: `Commande COD invité bloquée (${serverSubtotal.toFixed(2)} € > ${maxCodGuest} €).`,
+        actor: String(incoming.shippingAddress?.email || 'Visiteur'),
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({
+        success: false,
+        error: `Pour prévenir les fausses commandes, le paiement à la livraison invité est plafonné à ${maxCodGuest} €. Connectez-vous ou choisissez le paiement par carte.`
+      });
+    }
+
+    // Commit stock decrements now that all checks passed
+    for (const item of normalizedItems) {
+      item.product.stock = Math.max(0, item.product.stock - item.quantity);
     }
 
     let discountAmount = 0;
@@ -818,9 +1269,18 @@ async function startServer() {
   });
 
   // ------------------------------------------------------------------
-  // API Routes - Prescriptions (/ordonnance)
+  // API Routes - Prescriptions (/ordonnance) with Private Vault
   // ------------------------------------------------------------------
   app.post('/api/prescriptions', (req: AuthedRequest, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`rx:${ip}`, 'prescriptions', ip, 6, 30 * 60 * 1000, 30 * 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Trop d’envois d’ordonnances sur une courte période. Réessayez plus tard.'
+      });
+    }
+
     uploadPrescription.single('file')(req, res, (err: any) => {
       if (err) {
         return res.status(400).json({ success: false, error: err.message || 'Erreur lors de l’envoi du fichier.' });
@@ -829,7 +1289,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Veuillez joindre votre ordonnance (image ou PDF).' });
       }
       const resolved = path.resolve(req.file.path);
-      if (!resolved.startsWith(uploadsDir + path.sep)) {
+      if (!resolved.startsWith(prescriptionsDir + path.sep)) {
         return res.status(400).json({ success: false, error: 'Chemin de fichier invalide.' });
       }
 
@@ -839,14 +1299,16 @@ async function startServer() {
       }
 
       const db = getDatabase();
+      const rxId = `ORD-RX-${Math.floor(1000 + Math.random() * 9000)}`;
       const newPrescription = {
-        id: `ORD-RX-${Math.floor(1000 + Math.random() * 9000)}`,
-        patientName: String(patientName).trim(),
-        email: String(email).trim(),
-        phone: String(phone).trim(),
+        id: rxId,
+        patientName: String(patientName).trim().slice(0, 100),
+        email: String(email).trim().slice(0, 120),
+        phone: String(phone).trim().slice(0, 30),
         deliveryMode: deliveryMode === 'delivery' ? 'delivery' : 'click_and_collect',
-        notes: String(notes).trim(),
-        fileUrl: `/uploads/${req.file.filename}`,
+        notes: String(notes).trim().slice(0, 800),
+        storedFileName: req.file.filename,
+        fileUrl: `/api/prescriptions/${rxId}/file`,
         fileName: req.file.originalname,
         status: 'En attente',
         createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
@@ -854,6 +1316,14 @@ async function startServer() {
       };
 
       db.prescriptions.unshift(newPrescription);
+      recordSecurityEvent(db, {
+        category: 'medical_privacy',
+        severity: 'info',
+        event: 'PRESCRIPTION_STORED_VAULT',
+        detail: `Ordonnance ${rxId} chiffrée/isolée dans le coffre privé officinal.`,
+        actor: newPrescription.email,
+        ip
+      });
       saveDatabase(db);
       io.emit('prescriptions-updated', db.prescriptions);
       res.json({ success: true, prescription: newPrescription });
@@ -872,7 +1342,63 @@ async function startServer() {
     res.json(mine);
   });
 
-  app.patch('/api/prescriptions/:id', requireAdmin, (req, res) => {
+  app.get('/api/prescriptions/:id/file', requireAuth, (req: AuthedRequest, res) => {
+    const { id } = req.params;
+    const ip = getClientIp(req);
+    const db = getDatabase();
+    const rx = (db.prescriptions || []).find((p: any) => p.id === id);
+    if (!rx) {
+      return res.status(404).json({ success: false, error: 'Ordonnance introuvable.' });
+    }
+    const isOwnerOrAdmin =
+      req.authUser!.role === 'admin' ||
+      rx.userId === req.authUser!.id ||
+      String(rx.email || '').toLowerCase() === req.authUser!.email.toLowerCase();
+
+    if (!isOwnerOrAdmin) {
+      recordSecurityEvent(db, {
+        category: 'medical_privacy',
+        severity: 'critical',
+        event: 'PRESCRIPTION_UNAUTHORIZED_ACCESS',
+        detail: `Tentative d’accès non autorisée à l’ordonnance ${id}.`,
+        actor: req.authUser!.email,
+        ip
+      });
+      saveDatabase(db);
+      return res.status(403).json({ success: false, error: 'Accès strictement interdit à cette ordonnance.' });
+    }
+
+    const rawStored = rx.storedFileName || path.basename(String(rx.fileUrl || ''));
+    const safeName = path.basename(rawStored);
+    if (!safeName) {
+      return res.status(404).json({ success: false, error: 'Fichier introuvable.' });
+    }
+
+    let resolvedPath = path.resolve(prescriptionsDir, safeName);
+    if (!resolvedPath.startsWith(prescriptionsDir + path.sep) || !fs.existsSync(resolvedPath)) {
+      const legacyPath = path.resolve(uploadsDir, safeName);
+      if (legacyPath.startsWith(uploadsDir + path.sep) && fs.existsSync(legacyPath)) {
+        resolvedPath = legacyPath;
+      } else {
+        return res.status(404).json({ success: false, error: 'Fichier d’ordonnance introuvable.' });
+      }
+    }
+
+    recordSecurityEvent(db, {
+      category: 'medical_privacy',
+      severity: 'info',
+      event: 'PRESCRIPTION_ACCESSED',
+      detail: `Consultation sécurisée du document médical ${id}.`,
+      actor: req.authUser!.email,
+      ip
+    });
+    saveDatabase(db);
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(resolvedPath);
+  });
+
+  app.patch('/api/prescriptions/:id', requireAdmin, (req: AuthedRequest, res) => {
     const { id } = req.params;
     const { status, pharmacistNote } = req.body;
     const allowed = ['En attente', 'Validée par le pharmacien', 'Prête en officine', 'Refusée'];
@@ -886,27 +1412,58 @@ async function startServer() {
     }
     if (status) rx.status = status;
     if (pharmacistNote !== undefined) rx.pharmacistNote = String(pharmacistNote);
+    recordSecurityEvent(db, {
+      category: 'admin',
+      severity: 'info',
+      event: 'PRESCRIPTION_STATUS_UPDATED',
+      detail: `Ordonnance ${id} passée au statut "${rx.status}".`,
+      actor: req.authUser?.email || 'Admin',
+      ip: getClientIp(req)
+    });
     saveDatabase(db);
     io.emit('prescriptions-updated', db.prescriptions);
     res.json({ success: true, prescription: rx });
   });
 
   // ------------------------------------------------------------------
-  // API Routes - Contact Messages
+  // API Routes - Contact Messages (with Anti-Flood & Honeypot)
   // ------------------------------------------------------------------
   app.post('/api/contact', async (req, res) => {
-    const { name, email, phone = '', subject, message } = req.body;
+    const ip = getClientIp(req);
+    const { name, email, phone = '', subject, message, website } = req.body || {};
+    const db = getDatabase();
+
+    if (website && String(website).trim() !== '') {
+      recordSecurityEvent(db, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'BOT_HONEYPOT',
+        detail: 'Bot bloqué sur le formulaire de contact.',
+        actor: String(email || 'Bot'),
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({ success: false, error: 'Envoi refusé.' });
+    }
+
+    const rl = checkRateLimit(`contact:${ip}`, 'contact', ip, 5, 15 * 60 * 1000, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Trop de messages envoyés. Veuillez patienter avant de renvoyer une demande.'
+      });
+    }
+
     if (!name || !email || !subject || !message) {
       return res.status(400).json({ success: false, error: 'Veuillez remplir tous les champs obligatoires.' });
     }
-    const db = getDatabase();
     const entry = {
       id: `MSG-${Date.now()}`,
-      name: String(name).trim(),
-      email: String(email).trim(),
-      phone: String(phone).trim(),
-      subject: String(subject).trim(),
-      message: String(message).trim(),
+      name: String(name).trim().slice(0, 100),
+      email: String(email).trim().slice(0, 120),
+      phone: String(phone).trim().slice(0, 30),
+      subject: String(subject).trim().slice(0, 160),
+      message: String(message).trim().slice(0, 2000),
       status: 'Nouveau',
       createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
@@ -947,6 +1504,196 @@ async function startServer() {
   });
 
   // ------------------------------------------------------------------
+  // API Routes - Live Pharmacist Chat Sessions
+  // ------------------------------------------------------------------
+  app.get('/api/chat/session/:sessionId', (req, res) => {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'Session de chat invalide.' });
+    }
+    const db = getDatabase();
+    const session = db.chatSessions.find((s: any) => s.id === sessionId) || null;
+    res.json({ success: true, session });
+  });
+
+  app.post('/api/chat/session/:sessionId/messages', (req: AuthedRequest, res) => {
+    const ip = getClientIp(req);
+    const { text, visitorName, visitorEmail, timestamp, website } = req.body || {};
+    if (website && String(website).trim().length > 0) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'CHAT_HONEYPOT_TRIGGERED',
+        detail: 'Message automatisé rejeté via champ piège sur le tchat en direct.',
+        actor: String(visitorEmail || 'bot'),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(400).json({ success: false, error: 'Requête rejetée par le filtre anti-spam.' });
+    }
+
+    const rate = checkRateLimit(`chat:${ip}`, 'chat_messages', ip, 25, 10 * 60 * 1000, 10 * 60 * 1000, true);
+    if (!rate.allowed) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'CHAT_RATE_LIMIT_BLOCKED',
+        detail: 'Rafale excessive de messages sur le tchat patient.',
+        actor: String(visitorEmail || 'anonyme'),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(429).json({
+        success: false,
+        error: 'Vous envoyez des messages trop rapidement. Merci de patienter quelques minutes.'
+      });
+    }
+
+    const sessionId = String(req.params.sessionId || '').trim();
+    const cleanText = String(text || '').trim().slice(0, 2000);
+    if (!sessionId || !cleanText) {
+      return res.status(400).json({ success: false, error: 'Le message ne peut pas être vide.' });
+    }
+
+    const db = getDatabase();
+    const authUserObj = req.authUser ? db.users.find((u: any) => u.id === req.authUser!.id) : null;
+    const nowDisplay = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    let session = db.chatSessions.find((s: any) => s.id === sessionId);
+    const resolvedName =
+      authUserObj?.name ||
+      (visitorName ? String(visitorName).trim() : '') ||
+      session?.visitorName ||
+      `Visiteur #${sessionId.slice(-4).toUpperCase()}`;
+    const resolvedEmail =
+      authUserObj?.email ||
+      (visitorEmail ? String(visitorEmail).trim() : '') ||
+      session?.visitorEmail ||
+      '';
+
+    if (!session) {
+      session = {
+        id: sessionId,
+        visitorName: resolvedName,
+        visitorEmail: resolvedEmail,
+        userId: authUserObj?.id,
+        status: 'Ouvert',
+        unreadByAdmin: 0,
+        updatedAt: nowIso,
+        messages: []
+      };
+      db.chatSessions.unshift(session);
+    } else {
+      session.visitorName = resolvedName;
+      if (resolvedEmail) session.visitorEmail = resolvedEmail;
+      if (authUserObj?.id) session.userId = authUserObj.id;
+      session.status = 'Ouvert';
+    }
+
+    const userMsg = {
+      id: `chat-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      sender: 'user',
+      senderName: resolvedName,
+      text: cleanText,
+      timestamp: timestamp ? String(timestamp) : nowDisplay,
+      createdAt: nowIso
+    };
+    session.messages.push(userMsg);
+    session.unreadByAdmin = (Number(session.unreadByAdmin) || 0) + 1;
+    session.updatedAt = nowIso;
+
+    // First-message instant acknowledgment so the patient knows their message reached the pharmacy
+    const hasPharmacistOrBotAck = session.messages.some((m: any) => m.sender === 'bot' || m.sender === 'pharmacist');
+    if (!hasPharmacistOrBotAck) {
+      session.messages.push({
+        id: `chat-ack-${Date.now()}`,
+        sender: 'bot',
+        senderName: 'Assistant Myrlan',
+        text: "Merci pour votre message. Il vient d'être transmis à notre équipe officinale ; un pharmacien vous répondra ici même dans les plus brefs délais.",
+        timestamp: nowDisplay,
+        createdAt: nowIso
+      });
+    }
+
+    // Move updated session to top
+    db.chatSessions = [session, ...db.chatSessions.filter((s: any) => s.id !== sessionId)];
+    saveDatabase(db);
+
+    io.emit('chat-session-updated', session);
+    io.emit('chat-sessions-updated', db.chatSessions);
+
+    res.json({ success: true, session, message: userMsg });
+  });
+
+  app.get('/api/admin/chat', requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json(db.chatSessions);
+  });
+
+  app.post('/api/admin/chat/:sessionId/reply', requireAdmin, (req: AuthedRequest, res) => {
+    const sessionId = String(req.params.sessionId || '').trim();
+    const { text } = req.body;
+    const cleanText = String(text || '').trim();
+    if (!cleanText) {
+      return res.status(400).json({ success: false, error: 'Veuillez saisir une réponse.' });
+    }
+
+    const db = getDatabase();
+    const session = db.chatSessions.find((s: any) => s.id === sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Conversation introuvable.' });
+    }
+
+    const adminUser = db.users.find((u: any) => u.id === req.authUser!.id);
+    const nowDisplay = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const nowIso = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    const replyMsg = {
+      id: `chat-rx-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      sender: 'pharmacist',
+      senderName: adminUser?.name ? `${adminUser.name} (Pharmacien)` : 'Claire (Pharmacienne)',
+      text: cleanText,
+      timestamp: nowDisplay,
+      createdAt: nowIso
+    };
+
+    session.messages.push(replyMsg);
+    session.unreadByAdmin = 0;
+    session.updatedAt = nowIso;
+
+    db.chatSessions = [session, ...db.chatSessions.filter((s: any) => s.id !== sessionId)];
+    saveDatabase(db);
+
+    io.emit('chat-session-updated', session);
+    io.emit('chat-sessions-updated', db.chatSessions);
+
+    res.json({ success: true, session, message: replyMsg });
+  });
+
+  app.patch('/api/admin/chat/:sessionId', requireAdmin, (req, res) => {
+    const sessionId = String(req.params.sessionId || '').trim();
+    const { status, markRead } = req.body;
+    const db = getDatabase();
+    const session = db.chatSessions.find((s: any) => s.id === sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Conversation introuvable.' });
+    }
+    if (status === 'Ouvert' || status === 'Résolu') {
+      session.status = status;
+    }
+    if (markRead) {
+      session.unreadByAdmin = 0;
+    }
+    saveDatabase(db);
+    io.emit('chat-session-updated', session);
+    io.emit('chat-sessions-updated', db.chatSessions);
+    res.json({ success: true, session });
+  });
+
+  // ------------------------------------------------------------------
   // API Routes - Authentication & Account
   // ------------------------------------------------------------------
   app.get('/api/auth/me', (req: AuthedRequest, res) => {
@@ -962,34 +1709,85 @@ async function startServer() {
   });
 
   app.post('/api/auth/login', (req, res) => {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ success: false, error: 'Email et mot de passe requis.' });
     }
-    const db = getDatabase();
-    const user = db.users.find((u: any) => u.email.toLowerCase() === String(email).trim().toLowerCase());
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'Email ou mot de passe incorrect.' });
-    }
-    const check = verifyPassword(String(password), user.password);
-    if (!check.valid) {
-      return res.status(401).json({ success: false, error: 'Email ou mot de passe incorrect.' });
-    }
-    if (check.needsRehash) {
-      user.password = hashPassword(String(password));
-      saveDatabase(db);
+    const ip = getClientIp(req);
+    const cleanEmail = String(email).trim().toLowerCase();
+    const loginKey = `login:${ip}:${cleanEmail}`;
+
+    // Check active brute-force block without incrementing yet
+    const preCheck = checkRateLimit(loginKey, 'auth_login', ip, 5, 15 * 60 * 1000, 15 * 60 * 1000, false);
+    if (!preCheck.allowed) {
+      const waitMin = Math.max(1, Math.ceil(preCheck.remainingMs / 60000));
+      return res.status(429).json({
+        success: false,
+        error: `Trop de tentatives échouées. Compte temporairement verrouillé (${waitMin} min).`
+      });
     }
 
-    const token = signSessionToken({ id: user.id, email: user.email, role: user.role });
-    res.cookie(SESSION_COOKIE_NAME, token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-    res.json({ success: true, user: sanitizeUser(user) });
+    const db = getDatabase();
+    const user = db.users.find((u: any) => u.email.toLowerCase() === cleanEmail);
+    const check = user ? verifyPassword(String(password), user.password) : { valid: false, needsRehash: false };
+
+    if (!user || !check.valid) {
+      const rec = recordAuthFailure(loginKey, ip, 5, 15 * 60 * 1000, 15 * 60 * 1000);
+      const isNowBlocked = rec.blockedUntil > Date.now();
+      recordSecurityEvent(db, {
+        category: 'auth',
+        severity: isNowBlocked ? 'critical' : 'warning',
+        event: isNowBlocked ? 'IP_BLOCKED_BRUTEFORCE' : 'LOGIN_FAILED',
+        detail: isNowBlocked
+          ? `Verrouillage 15 min après ${rec.count} échecs de connexion.`
+          : `Mot de passe incorrect (${rec.count}/5 avant blocage).`,
+        actor: cleanEmail,
+        ip
+      });
+      saveDatabase(db);
+      return res.status(isNowBlocked ? 429 : 401).json({
+        success: false,
+        error: isNowBlocked
+          ? 'Trop de tentatives échouées. Accès bloqué pendant 15 minutes.'
+          : 'Email ou mot de passe incorrect.'
+      });
+    }
+
+    // Successful login: reset brute-force counter
+    clearRateKey(loginKey);
+
+    if (check.needsRehash) {
+      user.password = hashPassword(String(password));
+    }
+
+    if (user.role === 'admin') {
+      recordSecurityEvent(db, {
+        category: 'admin',
+        severity: 'info',
+        event: 'ADMIN_LOGIN',
+        detail: 'Connexion validée au back-office pharmacien.',
+        actor: user.email,
+        ip
+      });
+    }
+    saveDatabase(db);
+
+    const epoch = Number(db.securityConfig?.tokenEpoch || 1);
+    const token = signSessionToken({ id: user.id, email: user.email, role: user.role }, epoch);
+    res.cookie(SESSION_COOKIE_NAME, token, getSessionCookieOptions(req));
+    res.json({ success: true, token, user: sanitizeUser(user) });
   });
 
   app.post('/api/auth/register', (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`register:${ip}`, 'auth_register', ip, 5, 30 * 60 * 1000, 30 * 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Trop de créations de comptes depuis cette adresse. Réessayez plus tard.'
+      });
+    }
+
     const { name, email, password, skinType = 'Mixte à sensible' } = req.body;
     const cleanEmail = String(email || '').trim().toLowerCase();
     if (!name || !cleanEmail || !password || String(password).length < 6) {
@@ -1002,7 +1800,7 @@ async function startServer() {
     }
     const newUser = {
       id: `usr-${Date.now()}`,
-      name: String(name).trim(),
+      name: String(name).trim().slice(0, 100),
       email: cleanEmail,
       password: hashPassword(String(password)),
       role: 'customer',
@@ -1014,21 +1812,28 @@ async function startServer() {
     db.users.push(newUser);
     saveDatabase(db);
 
-    const token = signSessionToken({ id: newUser.id, email: newUser.email, role: 'customer' });
-    res.cookie(SESSION_COOKIE_NAME, token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-    res.json({ success: true, user: sanitizeUser(newUser) });
+    const epoch = Number(db.securityConfig?.tokenEpoch || 1);
+    const token = signSessionToken({ id: newUser.id, email: newUser.email, role: 'customer' }, epoch);
+    res.cookie(SESSION_COOKIE_NAME, token, getSessionCookieOptions(req));
+    res.json({ success: true, token, user: sanitizeUser(newUser) });
   });
 
-  app.post('/api/auth/logout', (_req, res) => {
-    res.clearCookie(SESSION_COOKIE_NAME);
+  app.post('/api/auth/logout', (req, res) => {
+    const opts = getSessionCookieOptions(req);
+    res.clearCookie(SESSION_COOKIE_NAME, { httpOnly: opts.httpOnly, sameSite: opts.sameSite, secure: opts.secure });
     res.json({ success: true });
   });
 
   app.post('/api/auth/forgot-password', async (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`forgot:${ip}`, 'auth_forgot', ip, 4, 15 * 60 * 1000, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Trop de demandes de réinitialisation. Patienter 15 minutes.'
+      });
+    }
+
     const { email } = req.body;
     const cleanEmail = String(email || '').trim().toLowerCase();
     if (!cleanEmail) {
@@ -1044,6 +1849,14 @@ async function startServer() {
         email: cleanEmail,
         tokenHash,
         expiresAt: Date.now() + 60 * 60 * 1000
+      });
+      recordSecurityEvent(db, {
+        category: 'auth',
+        severity: 'info',
+        event: 'PASSWORD_RESET_REQUESTED',
+        detail: 'Jeton temporaire de réinitialisation généré.',
+        actor: cleanEmail,
+        ip
       });
       saveDatabase(db);
 
@@ -1089,6 +1902,14 @@ async function startServer() {
     }
     user.password = hashPassword(String(newPassword));
     db.resetTokens = db.resetTokens.filter((t: any) => t.email !== cleanEmail);
+    recordSecurityEvent(db, {
+      category: 'auth',
+      severity: 'info',
+      event: 'PASSWORD_RESET_COMPLETED',
+      detail: 'Mot de passe réinitialisé via jeton sécurisé.',
+      actor: cleanEmail,
+      ip: getClientIp(req)
+    });
     saveDatabase(db);
     res.json({ success: true, message: 'Votre mot de passe a été mis à jour avec succès.' });
   });
@@ -1106,6 +1927,14 @@ async function startServer() {
       return res.status(400).json({ success: false, error: 'Mot de passe actuel incorrect.' });
     }
     user.password = hashPassword(String(newPassword));
+    recordSecurityEvent(db, {
+      category: 'auth',
+      severity: 'info',
+      event: 'PASSWORD_CHANGED',
+      detail: 'Mot de passe modifié par l’utilisateur.',
+      actor: user.email,
+      ip: getClientIp(req)
+    });
     saveDatabase(db);
     res.json({ success: true, message: 'Mot de passe modifié avec succès.' });
   });
@@ -1183,6 +2012,665 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  // ------------------------------------------------------------------
+  // Public SEO & Webmaster Endpoints (/sitemap.xml, /robots.txt, metadata)
+  // ------------------------------------------------------------------
+  app.get('/sitemap.xml', (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const xml = buildSitemapXml(db, baseUrl);
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.send(xml);
+  });
+
+  app.get('/robots.txt', (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const txt = buildRobotsTxt(db, baseUrl);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(txt);
+  });
+
+  app.get('/api/webmaster/public', (_req, res) => {
+    const db = getDatabase();
+    const wm = db.webmaster || DEFAULT_WEBMASTER_CONFIG;
+    res.json({
+      siteTitle: wm.siteTitle,
+      siteDescription: wm.siteDescription,
+      canonicalBaseUrl: wm.canonicalBaseUrl,
+      ogImageUrl: wm.ogImageUrl,
+      googleSiteVerification: wm.googleSiteVerification,
+      bingSiteVerification: wm.bingSiteVerification,
+      gaMeasurementId: wm.gaMeasurementId,
+      enablePharmacyJsonLd: wm.enablePharmacyJsonLd,
+      enableProductJsonLd: wm.enableProductJsonLd,
+      redirects: (wm.redirects || []).filter((r: any) => r.active)
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Admin Webmaster & SEO Management APIs
+  // ------------------------------------------------------------------
+  app.get('/api/admin/webmaster', requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const sitemapXml = buildSitemapXml(db, baseUrl);
+    const robotsPreview = buildRobotsTxt(db, baseUrl);
+    const productUrlsCount = db.webmaster?.sitemapIncludeProducts !== false ? db.products.length : 0;
+    const publicPagesCount = PUBLIC_STOREFRONT_ROUTES.length;
+    res.json({
+      config: db.webmaster,
+      resolvedBaseUrl: baseUrl,
+      sitemapXml,
+      robotsPreview,
+      defaultRobotsTxt: DEFAULT_ROBOTS_TXT,
+      stats: {
+        publicPagesCount,
+        productUrlsCount,
+        sitemapUrlsCount: publicPagesCount + productUrlsCount,
+        activeRedirectsCount: (db.webmaster?.redirects || []).filter((r: any) => r.active).length
+      }
+    });
+  });
+
+  app.put('/api/admin/webmaster', requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const body = req.body || {};
+    const current = db.webmaster || { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] };
+
+    const gaId = String(body.gaMeasurementId ?? current.gaMeasurementId ?? '').trim().toUpperCase();
+    if (gaId && !/^(G|GT|GTM)-[A-Z0-9]{4,16}$/.test(gaId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Identifiant Analytics invalide (format attendu : G-XXXXXXXXXX ou GTM-XXXXXXX).'
+      });
+    }
+
+    const canonicalRaw = String(body.canonicalBaseUrl ?? current.canonicalBaseUrl ?? '').trim().replace(/\/+$/, '');
+    if (canonicalRaw && !/^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/.test(canonicalRaw)) {
+      return res.status(400).json({
+        success: false,
+        error: 'URL canonique invalide (exemple : https://www.myrlan.fr).'
+      });
+    }
+
+    const ogImgRaw = String(body.ogImageUrl ?? current.ogImageUrl ?? '').trim();
+    if (ogImgRaw && !ogImgRaw.startsWith('/') && !/^https?:\/\//i.test(ogImgRaw)) {
+      return res.status(400).json({
+        success: false,
+        error: 'URL image OpenGraph invalide (utilisez https://... ou un chemin /uploads/...).'
+      });
+    }
+
+    const changeFreq = ['daily', 'weekly', 'monthly'].includes(body.sitemapChangeFreq)
+      ? body.sitemapChangeFreq
+      : current.sitemapChangeFreq;
+
+    const updated = {
+      ...current,
+      siteTitle: String(body.siteTitle ?? current.siteTitle).trim().slice(0, 120) || DEFAULT_WEBMASTER_CONFIG.siteTitle,
+      siteDescription: String(body.siteDescription ?? current.siteDescription).trim().slice(0, 320) || DEFAULT_WEBMASTER_CONFIG.siteDescription,
+      canonicalBaseUrl: canonicalRaw,
+      ogImageUrl: ogImgRaw,
+      googleSiteVerification: String(body.googleSiteVerification ?? current.googleSiteVerification ?? '').trim().slice(0, 160),
+      bingSiteVerification: String(body.bingSiteVerification ?? current.bingSiteVerification ?? '').trim().slice(0, 160),
+      gaMeasurementId: gaId,
+      robotsTxt: String(body.robotsTxt ?? current.robotsTxt ?? DEFAULT_ROBOTS_TXT).slice(0, 8000),
+      sitemapIncludeProducts: body.sitemapIncludeProducts !== undefined ? Boolean(body.sitemapIncludeProducts) : current.sitemapIncludeProducts,
+      sitemapChangeFreq: changeFreq,
+      enablePharmacyJsonLd: body.enablePharmacyJsonLd !== undefined ? Boolean(body.enablePharmacyJsonLd) : current.enablePharmacyJsonLd,
+      enableProductJsonLd: body.enableProductJsonLd !== undefined ? Boolean(body.enableProductJsonLd) : current.enableProductJsonLd,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+
+    db.webmaster = updated;
+    saveDatabase(db);
+
+    const baseUrl = resolveBaseUrl(req, updated);
+    io.emit('webmaster-updated', updated);
+
+    res.json({
+      success: true,
+      config: updated,
+      resolvedBaseUrl: baseUrl,
+      sitemapXml: buildSitemapXml(db, baseUrl),
+      robotsPreview: buildRobotsTxt(db, baseUrl)
+    });
+  });
+
+  app.post('/api/admin/webmaster/redirects', requireAdmin, (req, res) => {
+    const { fromPath, toPath, statusCode = 301 } = req.body || {};
+    const cleanFrom = normalizeInternalPath(fromPath);
+    const cleanTo = normalizeInternalPath(toPath);
+
+    if (!cleanFrom || !cleanTo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Les chemins source et cible doivent commencer par / (ex: /ancien-produit → /).'
+      });
+    }
+    if (cleanFrom === cleanTo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Le chemin source et la destination doivent être différents.'
+      });
+    }
+    if (cleanFrom.startsWith('/api') || cleanFrom === '/admin' || cleanFrom === '/sitemap.xml' || cleanFrom === '/robots.txt') {
+      return res.status(400).json({
+        success: false,
+        error: 'Impossible de rediriger une route système (/api, /admin, /sitemap.xml, /robots.txt).'
+      });
+    }
+
+    const db = getDatabase();
+    const list = db.webmaster.redirects || [];
+    if (list.some((r: any) => r.fromPath === cleanFrom)) {
+      return res.status(400).json({
+        success: false,
+        error: `Une redirection existe déjà pour ${cleanFrom}.`
+      });
+    }
+
+    const rule = {
+      id: `redir-${Date.now()}`,
+      fromPath: cleanFrom,
+      toPath: cleanTo,
+      statusCode: Number(statusCode) === 302 ? 302 : 301,
+      active: true,
+      hits: 0,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    db.webmaster.redirects = [rule, ...list];
+    db.webmaster.updatedAt = new Date().toISOString().split('T')[0];
+    saveDatabase(db);
+    io.emit('webmaster-updated', db.webmaster);
+
+    res.json({ success: true, redirect: rule, redirects: db.webmaster.redirects });
+  });
+
+  app.patch('/api/admin/webmaster/redirects/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    const list = db.webmaster.redirects || [];
+    const rule = list.find((r: any) => r.id === id);
+    if (!rule) {
+      return res.status(404).json({ success: false, error: 'Redirection introuvable.' });
+    }
+    if (req.body?.active !== undefined) rule.active = Boolean(req.body.active);
+    if (req.body?.statusCode !== undefined) rule.statusCode = Number(req.body.statusCode) === 302 ? 302 : 301;
+    saveDatabase(db);
+    io.emit('webmaster-updated', db.webmaster);
+    res.json({ success: true, redirect: rule, redirects: list });
+  });
+
+  app.delete('/api/admin/webmaster/redirects/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    db.webmaster.redirects = (db.webmaster.redirects || []).filter((r: any) => r.id !== id);
+    saveDatabase(db);
+    io.emit('webmaster-updated', db.webmaster);
+    res.json({ success: true, redirects: db.webmaster.redirects });
+  });
+
+  app.post('/api/admin/webmaster/check-urls', requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const checks: any[] = [];
+
+    // 1. SEO Files
+    const sitemapXml = buildSitemapXml(db, baseUrl);
+    const robotsTxt = buildRobotsTxt(db, baseUrl);
+    checks.push({
+      url: '/sitemap.xml',
+      label: 'Sitemap XML dynamique',
+      category: 'Fichier SEO',
+      status: 200,
+      ok: sitemapXml.includes('<urlset') && sitemapXml.includes('<loc>'),
+      note: `${(sitemapXml.match(/<url>/g) || []).length} URL(s) indexées`
+    });
+    checks.push({
+      url: '/robots.txt',
+      label: 'Fichier robots.txt',
+      category: 'Fichier SEO',
+      status: 200,
+      ok: robotsTxt.includes('User-agent:'),
+      note: robotsTxt.includes('Sitemap:') ? 'Directive Sitemap présente' : 'Directive Sitemap absente'
+    });
+
+    // 2. Public storefront routes
+    for (const r of PUBLIC_STOREFRONT_ROUTES) {
+      checks.push({
+        url: r.path,
+        label: r.label,
+        category: 'Page',
+        status: 200,
+        ok: true,
+        note: `Priorité ${r.priority} · ${r.changefreq}`
+      });
+    }
+
+    // 3. Product routes & media checks
+    for (const p of db.products) {
+      const hasDesc = Boolean(p.description && String(p.description).trim().length >= 30);
+      const hasValidEan = /^\d{8,14}$/.test(String(p.ean || '').trim());
+      checks.push({
+        url: `/produit/${p.id}`,
+        label: p.name,
+        category: 'Produit',
+        status: hasDesc && hasValidEan ? 200 : 'OK',
+        ok: hasDesc && hasValidEan,
+        note: !hasDesc
+          ? 'Description courte à enrichir'
+          : !hasValidEan
+            ? 'Code EAN manquant ou invalide'
+            : `EAN ${p.ean} · Stock ${p.stock}`
+      });
+
+      const img = String(p.image || '').trim();
+      if (img.startsWith('/uploads/')) {
+        const fileName = path.basename(img);
+        const resolved = path.resolve(uploadsDir, fileName);
+        const exists = resolved.startsWith(uploadsDir + path.sep) && fs.existsSync(resolved);
+        checks.push({
+          url: img,
+          label: `Image · ${p.name}`,
+          category: 'Média',
+          status: exists ? 200 : 404,
+          ok: exists,
+          note: exists ? 'Fichier local présent' : 'Fichier introuvable sur le serveur'
+        });
+      } else if (!img || (!img.startsWith('https://') && !img.startsWith('http://') && !img.startsWith('/'))) {
+        checks.push({
+          url: img || '(aucune image)',
+          label: `Image · ${p.name}`,
+          category: 'Média',
+          status: 'Erreur',
+          ok: false,
+          note: 'URL image manquante ou invalide'
+        });
+      }
+    }
+
+    res.json({ success: true, checkedAt: new Date().toISOString(), checks });
+  });
+
+  app.get('/api/admin/webmaster/export', requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    const sanitizedExport = {
+      exportedAt: new Date().toISOString(),
+      products: db.products,
+      orders: db.orders,
+      promoCodes: db.promoCodes,
+      prescriptions: db.prescriptions,
+      contactMessages: db.contactMessages,
+      appointments: db.appointments,
+      webmaster: db.webmaster,
+      users: (db.users || []).map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt
+      }))
+    };
+    const filename = `myrlan-backup-${new Date().toISOString().split('T')[0]}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(sanitizedExport, null, 2));
+  });
+
+  // ------------------------------------------------------------------
+  // Pharmacy Appointments Booking & Admin Management APIs
+  // ------------------------------------------------------------------
+  app.get('/api/appointments/slots', (req, res) => {
+    const date = String(req.query.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ success: false, error: 'Date invalide (AAAA-MM-JJ).' });
+    }
+    const db = getDatabase();
+    const bookedSlots = (db.appointments || [])
+      .filter((a: any) => a.date === date && a.status !== 'Annulé')
+      .map((a: any) => a.timeSlot);
+    res.json({ date, allSlots: APPOINTMENT_TIME_SLOTS, bookedSlots });
+  });
+
+  app.get('/api/appointments/mine', requireAuth, (req: AuthedRequest, res) => {
+    const db = getDatabase();
+    const emailLower = req.authUser!.email.toLowerCase();
+    const list = (db.appointments || []).filter(
+      (a: any) => a.userId === req.authUser!.id || String(a.patientEmail || '').toLowerCase() === emailLower
+    );
+    res.json(list);
+  });
+
+  app.post('/api/appointments', (req: AuthedRequest, res) => {
+    const ip = getClientIp(req);
+    const { serviceType, format, date, timeSlot, patientName, patientEmail, patientPhone, notes, website } = req.body || {};
+    if (website && String(website).trim().length > 0) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'APPOINTMENT_HONEYPOT_TRIGGERED',
+        detail: 'Réservation automatisée bloquée via champ piège (anti-engorgement agenda).',
+        actor: String(patientEmail || 'bot'),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(400).json({ success: false, error: 'Requête rejetée par le contrôle anti-robot.' });
+    }
+
+    const rate = checkRateLimit(`appointments:${ip}`, 'appointments', ip, 10, 15 * 60 * 1000, 15 * 60 * 1000, true);
+    if (!rate.allowed) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: 'anti_sabotage',
+        severity: 'warning',
+        event: 'APPOINTMENT_FLOOD_BLOCKED',
+        detail: 'Tentative de saturation des créneaux de rendez-vous officinaux bloquée.',
+        actor: String(patientEmail || 'anonyme'),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(429).json({
+        success: false,
+        error: 'Trop de réservations en peu de temps. Merci de patienter 15 minutes.'
+      });
+    }
+
+    const service = APPOINTMENT_SERVICES[String(serviceType || '')];
+    if (!service) {
+      return res.status(400).json({ success: false, error: 'Motif de rendez-vous invalide.' });
+    }
+    const cleanFormat = format === 'visio' ? 'visio' : 'officine';
+    const cleanDate = String(date || '').trim();
+    const cleanSlot = String(timeSlot || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+      return res.status(400).json({ success: false, error: 'Veuillez choisir une date valide.' });
+    }
+    if (!APPOINTMENT_TIME_SLOTS.includes(cleanSlot)) {
+      return res.status(400).json({ success: false, error: 'Créneau horaire invalide.' });
+    }
+    const cleanName = String(patientName || '').trim().slice(0, 100);
+    const cleanEmail = String(patientEmail || '').trim().slice(0, 120);
+    const cleanPhone = String(patientPhone || '').trim().slice(0, 30);
+    if (!cleanName || !cleanEmail.includes('@') || !cleanPhone) {
+      return res.status(400).json({ success: false, error: 'Nom, email et téléphone sont requis.' });
+    }
+
+    const db = getDatabase();
+    const conflict = (db.appointments || []).some(
+      (a: any) => a.date === cleanDate && a.timeSlot === cleanSlot && a.status !== 'Annulé'
+    );
+    if (conflict) {
+      return res.status(409).json({
+        success: false,
+        error: 'Ce créneau vient d’être réservé. Veuillez choisir une autre heure.'
+      });
+    }
+
+    const appointment = {
+      id: `RDV-${Math.floor(1000 + Math.random() * 9000)}`,
+      serviceType: String(serviceType),
+      serviceLabel: service.label,
+      durationMinutes: service.durationMinutes,
+      format: cleanFormat,
+      date: cleanDate,
+      timeSlot: cleanSlot,
+      patientName: cleanName,
+      patientEmail: cleanEmail,
+      patientPhone: cleanPhone,
+      notes: String(notes || '').trim().slice(0, 500),
+      pharmacistNote: '',
+      status: 'Confirmé',
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      userId: req.authUser?.id
+    };
+
+    db.appointments.unshift(appointment);
+    saveDatabase(db);
+    io.emit('appointments-updated', db.appointments);
+
+    res.json({ success: true, appointment });
+  });
+
+  app.patch('/api/appointments/:id/cancel', requireAuth, (req: AuthedRequest, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    const appt = (db.appointments || []).find((a: any) => a.id === id);
+    if (!appt) {
+      return res.status(404).json({ success: false, error: 'Rendez-vous introuvable.' });
+    }
+    const isOwner =
+      req.authUser!.role === 'admin' ||
+      appt.userId === req.authUser!.id ||
+      String(appt.patientEmail || '').toLowerCase() === req.authUser!.email.toLowerCase();
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: 'Accès non autorisé.' });
+    }
+    appt.status = 'Annulé';
+    saveDatabase(db);
+    io.emit('appointments-updated', db.appointments);
+    res.json({ success: true, appointment: appt });
+  });
+
+  app.get('/api/admin/appointments', requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json(db.appointments || []);
+  });
+
+  app.patch('/api/admin/appointments/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const { status, pharmacistNote } = req.body || {};
+    const allowedStatuses = ['Confirmé', 'Terminé', 'Annulé'];
+    const db = getDatabase();
+    const appt = (db.appointments || []).find((a: any) => a.id === id);
+    if (!appt) {
+      return res.status(404).json({ success: false, error: 'Rendez-vous introuvable.' });
+    }
+    if (status !== undefined) {
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ success: false, error: 'Statut invalide.' });
+      }
+      appt.status = status;
+    }
+    if (pharmacistNote !== undefined) {
+      appt.pharmacistNote = String(pharmacistNote).trim().slice(0, 500);
+    }
+    saveDatabase(db);
+    io.emit('appointments-updated', db.appointments);
+    res.json({ success: true, appointment: appt });
+  });
+
+  // ------------------------------------------------------------------
+  // Security, Anti-Phishing & Firewall Admin APIs
+  // ------------------------------------------------------------------
+  app.get('/.well-known/security.txt', (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const body = `Contact: mailto:securite@myrlan.fr
+Expires: ${expires}
+Preferred-Languages: fr, en
+Canonical: ${baseUrl}/.well-known/security.txt
+Policy: ${baseUrl}/confidentialite
+`;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(body);
+  });
+
+  app.get('/api/security/public', (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    res.json({
+      officialBrand: 'Myrlan Parapharmacie & Pharmacie',
+      canonicalBaseUrl: db.webmaster?.canonicalBaseUrl || baseUrl,
+      maxCodGuestAmount: Number(db.securityConfig?.maxCodGuestAmount || 250),
+      antiPhishingNotice:
+        'Myrlan ne vous demandera jamais votre mot de passe, code SMS ou numéro de carte bancaire par email, téléphone ou lien externe.'
+    });
+  });
+
+  app.get('/api/admin/security', requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const now = Date.now();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+
+    const activeBlocks: any[] = [];
+    for (const [key, entry] of securityRateMap.entries()) {
+      if (entry.blockedUntil > now) {
+        activeBlocks.push({
+          key,
+          scope: entry.scope,
+          ip: entry.ip,
+          attempts: entry.count,
+          blockedUntil: new Date(entry.blockedUntil).toISOString().replace('T', ' ').substring(0, 19),
+          remainingMinutes: Math.max(1, Math.ceil((entry.blockedUntil - now) / 60000))
+        });
+      }
+    }
+
+    const logs = Array.isArray(db.securityLogs) ? db.securityLogs : [];
+    const failedLogins24h = logs.filter((l: any) => l.event === 'LOGIN_FAILED' || l.event === 'IP_BLOCKED_BRUTEFORCE').length;
+    const blockedBotsOrFlood24h = logs.filter((l: any) => l.category === 'anti_sabotage').length;
+
+    const weakAdminEmails: string[] = [];
+    for (const u of db.users || []) {
+      if (u.role !== 'admin') continue;
+      if (WEAK_PASSWORDS.some(weak => verifyPassword(weak, u.password).valid)) {
+        weakAdminEmails.push(u.email);
+      }
+    }
+
+    const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const securityTxtPreview = `Contact: mailto:securite@myrlan.fr\nExpires: ${expires}\nPreferred-Languages: fr, en\nCanonical: ${baseUrl}/.well-known/security.txt\nPolicy: ${baseUrl}/confidentialite`;
+
+    res.json({
+      config: db.securityConfig,
+      stats: {
+        activeBlocksCount: activeBlocks.length,
+        failedLogins24h,
+        blockedBotsOrFlood24h,
+        protectedPrescriptionsCount: (db.prescriptions || []).length,
+        weakAdminAccountsCount: weakAdminEmails.length
+      },
+      weakAdminEmails,
+      activeBlocks,
+      logs: logs.slice(0, 80),
+      securityTxtPreview,
+      headersEnabled: [
+        { name: 'Coffre Ordonnances Privé', value: 'Accès authentifié strict (/api/prescriptions/:id/file)' },
+        { name: 'Anti-Brute Force Auth', value: 'Blocage 15 min après 5 échecs de connexion' },
+        { name: 'Content-Security-Policy', value: 'Strict self + Google Analytics autorisé' },
+        { name: 'X-Content-Type-Options', value: 'nosniff' },
+        { name: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { name: 'Socket.IO CORS', value: 'Origines autorisées uniquement' }
+      ]
+    });
+  });
+
+  app.post('/api/admin/security/unblock', requireAdmin, (req: AuthedRequest, res) => {
+    const { key } = req.body || {};
+    if (!key) {
+      return res.status(400).json({ success: false, error: 'Clé de blocage requise.' });
+    }
+    clearRateKey(String(key));
+    const db = getDatabase();
+    recordSecurityEvent(db, {
+      category: 'admin',
+      severity: 'info',
+      event: 'IP_UNBLOCKED_ADMIN',
+      detail: `Déblocage manuel effectué (${String(key).slice(0, 60)}).`,
+      actor: req.authUser?.email || 'Admin',
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    res.json({ success: true });
+  });
+
+  app.post('/api/admin/security/revoke-sessions', requireAdmin, (req: AuthedRequest, res) => {
+    const db = getDatabase();
+    const nextEpoch = Number(db.securityConfig?.tokenEpoch || 1) + 1;
+    db.securityConfig = {
+      ...(db.securityConfig || {}),
+      tokenEpoch: nextEpoch
+    };
+    recordSecurityEvent(db, {
+      category: 'admin',
+      severity: 'critical',
+      event: 'SESSIONS_REVOKED',
+      detail: `Toutes les sessions antérieures ont été révoquées (epoch ${nextEpoch}).`,
+      actor: req.authUser?.email || 'Admin',
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+
+    // Issue fresh token & cookie for the acting admin so their session stays active seamlessly
+    const freshToken = signSessionToken(
+      { id: req.authUser!.id, email: req.authUser!.email, role: req.authUser!.role },
+      nextEpoch
+    );
+    res.cookie(SESSION_COOKIE_NAME, freshToken, getSessionCookieOptions(req));
+    res.json({ success: true, tokenEpoch: nextEpoch, token: freshToken });
+  });
+
+  app.patch('/api/admin/security/config', requireAdmin, (req: AuthedRequest, res) => {
+    const { maxCodGuestAmount, maxOrderQtyPerItem, maxOrderTotalItems } = req.body || {};
+    const db = getDatabase();
+    const cfg = db.securityConfig || { tokenEpoch: 1 };
+    if (maxCodGuestAmount !== undefined) {
+      cfg.maxCodGuestAmount = Math.max(50, Math.min(2000, Number(maxCodGuestAmount) || 250));
+    }
+    if (maxOrderQtyPerItem !== undefined) {
+      cfg.maxOrderQtyPerItem = Math.max(1, Math.min(50, Number(maxOrderQtyPerItem) || 10));
+    }
+    if (maxOrderTotalItems !== undefined) {
+      cfg.maxOrderTotalItems = Math.max(1, Math.min(100, Number(maxOrderTotalItems) || 30));
+    }
+    db.securityConfig = cfg;
+    recordSecurityEvent(db, {
+      category: 'admin',
+      severity: 'info',
+      event: 'SECURITY_POLICY_UPDATED',
+      detail: `Plafonds anti-sabotage mis à jour (COD invité ${cfg.maxCodGuestAmount}€, max/article ${cfg.maxOrderQtyPerItem}).`,
+      actor: req.authUser?.email || 'Admin',
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    res.json({ success: true, config: cfg });
+  });
+
+  // Server-side 301/302 Redirect Middleware for storefront URLs
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const reqPath = normalizeInternalPath(req.path);
+    if (!reqPath) return next();
+    if (
+      reqPath.startsWith('/api/') ||
+      reqPath.startsWith('/uploads/') ||
+      reqPath.startsWith('/@') ||
+      reqPath.startsWith('/src/') ||
+      reqPath.startsWith('/node_modules/') ||
+      reqPath === '/sitemap.xml' ||
+      reqPath === '/robots.txt'
+    ) {
+      return next();
+    }
+    const db = getDatabase();
+    const redirects = db.webmaster?.redirects || [];
+    const match = redirects.find((r: any) => r.active && r.fromPath === reqPath);
+    if (match) {
+      const safeTarget = normalizeInternalPath(match.toPath);
+      if (safeTarget && safeTarget !== reqPath) {
+        match.hits = (Number(match.hits) || 0) + 1;
+        saveDatabase(db);
+        return res.redirect(match.statusCode === 302 ? 302 : 301, safeTarget);
+      }
+    }
+    next();
   });
 
   // Vite middleware setup

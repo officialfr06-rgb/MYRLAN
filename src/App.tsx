@@ -15,9 +15,9 @@ import { FaqAdviceModal } from './components/FaqAdviceModal';
 import { LegalModal } from './components/LegalModal';
 import { AccountModal } from './components/AccountModal';
 import { AdminDashboard } from './components/AdminDashboard';
-import { SidebarMenu } from './components/SidebarMenu';
 import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
+import { SeoHeadManager } from './components/SeoHeadManager';
 
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PrescriptionPage } from './pages/PrescriptionPage';
@@ -28,6 +28,8 @@ import { AdviceBlogPage } from './pages/AdviceBlogPage';
 import { BrandsPage, PromotionsPage } from './pages/BrandsPromosPages';
 import { AccountPage, OrdersPage } from './pages/AccountOrdersPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
+import { DiagnosticPage } from './pages/DiagnosticPage';
+import { AppointmentsPage } from './pages/AppointmentsPage';
 
 const StoreContent: React.FC = () => {
   const { currentPath, selectedProductForDetail, navigate } = useShop();
@@ -53,6 +55,12 @@ const StoreContent: React.FC = () => {
     }
     if (currentPath === '/reset-password') {
       return <ResetPasswordPage />;
+    }
+    if (currentPath === '/diagnostic') {
+      return <DiagnosticPage />;
+    }
+    if (currentPath === '/rendez-vous') {
+      return <AppointmentsPage />;
     }
     if (currentPath === '/ordonnance') {
       return <PrescriptionPage />;
@@ -109,9 +117,6 @@ const StoreContent: React.FC = () => {
 
       <Footer />
 
-      {/* Floating / Sliding Overlay Sidebar Menu (Never changes site width or dimensions) */}
-      <SidebarMenu />
-
       {/* Overlays & Modals */}
       <CartDrawer />
       <CheckoutModal />
@@ -131,6 +136,7 @@ const StoreContent: React.FC = () => {
 export default function App() {
   return (
     <ShopProvider>
+      <SeoHeadManager />
       <StoreContent />
     </ShopProvider>
   );

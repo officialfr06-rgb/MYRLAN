@@ -12,9 +12,11 @@ import {
   ShippingCarrier,
   User,
   PromoCode,
-  SavedAddress
+  SavedAddress,
+  ChatSession
 } from '../types';
 import { MOCK_PRODUCTS } from '../data/mockProducts';
+import { authFetch, clearAuthToken } from '../utils/authToken';
 
 interface ShopContextType {
   products: Product[];
@@ -44,7 +46,6 @@ interface ShopContextType {
   isFaqOpen: boolean;
   isLegalOpen: boolean;
   isAccountOpen: boolean;
-  isSidebarDrawerOpen: boolean;
   selectedProductForDetail: Product | null;
   toastMessage: string | null;
 
@@ -64,7 +65,6 @@ interface ShopContextType {
   setIsFaqOpen: (open: boolean) => void;
   setIsLegalOpen: (open: boolean) => void;
   setIsAccountOpen: (open: boolean) => void;
-  setIsSidebarDrawerOpen: (open: boolean) => void;
   setSelectedProductForDetail: (p: Product | null) => void;
   setIsAdminMode: (admin: boolean) => void;
 
@@ -78,7 +78,8 @@ interface ShopContextType {
     address: ShippingAddress,
     paymentMethod: PaymentMethod,
     carrier: ShippingCarrier,
-    promoCode?: string
+    promoCode?: string,
+    honeypot?: string
   ) => Promise<Order>;
   updateOrderStatus: (orderId: string, status: Order['status']) => Promise<void>;
   refreshOrders: () => Promise<void>;
@@ -86,7 +87,7 @@ interface ShopContextType {
   addProduct: (product: Omit<Product, 'id' | 'rating' | 'reviewsCount'>) => Promise<void>;
   updateProduct: (productId: string, updates: Partial<Product>) => Promise<boolean>;
   deleteProduct: (productId: string) => Promise<boolean>;
-  sendChatMessage: (text: string, sender?: 'user' | 'bot' | 'pharmacist') => void;
+  sendChatMessage: (text: string, sender?: 'user' | 'bot' | 'pharmacist', meta?: { visitorName?: string; visitorEmail?: string }) => Promise<void>;
   updateUserProfile: (profile: Partial<UserProfile>, persistServer?: boolean) => Promise<void>;
   saveAddressesToAccount: (addresses: SavedAddress[]) => Promise<void>;
   showToast: (msg: string) => void;
@@ -148,14 +149,31 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   });
 
+  const [chatSessionId] = useState<string>(() => {
+    const existing = localStorage.getItem('myrlan_chat_session_id');
+    if (existing) return existing;
+    const generated = `sess-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem('myrlan_chat_session_id', generated);
+    return generated;
+  });
+
+  const welcomeChatMessage: ChatMessage = useMemo(() => ({
+    id: 'msg-welcome',
+    sender: 'pharmacist',
+    senderName: 'Claire (Pharmacienne)',
+    text: 'Bonjour ! Je suis Claire, pharmacienne conseil chez Myrlan. Avez-vous une question sur nos produits ou besoin d\'une recommandation pour votre routine ?',
+    timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  }), []);
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
     const saved = localStorage.getItem('myrlan_chat');
     return saved ? JSON.parse(saved) : [
       {
-        id: 'msg-1',
+        id: 'msg-welcome',
         sender: 'pharmacist',
+        senderName: 'Claire (Pharmacienne)',
         text: 'Bonjour ! Je suis Claire, pharmacienne conseil chez Myrlan. Avez-vous une question sur nos produits ou besoin d\'une recommandation pour votre routine ?',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
       }
     ];
   });
@@ -179,7 +197,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedBrand, setSelectedBrand] = useState<string>('Toutes');
 
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
-  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState<boolean>(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
   const [isAiAdvisorOpen, setIsAiAdvisorOpen] = useState<boolean>(false);
   const [isLoyaltyOpen, setIsLoyaltyOpen] = useState<boolean>(false);
@@ -244,7 +261,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/orders', { credentials: 'include' });
+      const res = await authFetch('/api/orders');
       const data = await res.json();
       if (Array.isArray(data)) {
         setOrders(data);
@@ -271,10 +288,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logoutUser = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await authFetch('/api/auth/logout', { method: 'POST' });
     } catch {
       // ignore
     }
+    clearAuthToken();
     setCurrentUserState(null);
     setOrders([]);
     if (currentPath === '/admin') {
@@ -299,7 +317,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {});
 
-    fetch('/api/auth/me', { credentials: 'include' })
+    authFetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
         if (data.authenticated && data.user) {
@@ -309,7 +327,43 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       })
       .catch(() => {});
-  }, [setCurrentUser]);
+
+    // Hydrate persisted live chat session & migrate any pre-existing unsynced local user messages
+    authFetch(`/api/chat/session/${encodeURIComponent(chatSessionId)}`)
+      .then(res => res.json())
+      .then(async (data) => {
+        if (data.success && data.session && Array.isArray(data.session.messages) && data.session.messages.length > 0) {
+          setChatMessages([welcomeChatMessage, ...data.session.messages]);
+        } else if (!localStorage.getItem('myrlan_chat_migrated')) {
+          localStorage.setItem('myrlan_chat_migrated', '1');
+          const savedRaw = localStorage.getItem('myrlan_chat');
+          if (savedRaw) {
+            try {
+              const localMsgs = JSON.parse(savedRaw) as ChatMessage[];
+              const unsentUserMsgs = localMsgs.filter(m => m.sender === 'user' && m.text?.trim());
+              if (unsentUserMsgs.length > 0) {
+                let latestSession: ChatSession | null = null;
+                for (const m of unsentUserMsgs) {
+                  const postRes = await authFetch(`/api/chat/session/${encodeURIComponent(chatSessionId)}/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: m.text, timestamp: m.timestamp })
+                  });
+                  const postData = await postRes.json();
+                  if (postData.success && postData.session) latestSession = postData.session;
+                }
+                if (latestSession) {
+                  setChatMessages([welcomeChatMessage, ...latestSession.messages]);
+                }
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, [setCurrentUser, chatSessionId, welcomeChatMessage]);
 
   // Real-time WebSocket live updates from server
   useEffect(() => {
@@ -336,10 +390,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setGuestOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
     });
 
+    socket.on('chat-session-updated', (session: ChatSession) => {
+      if (session && session.id === chatSessionId && Array.isArray(session.messages)) {
+        setChatMessages([welcomeChatMessage, ...session.messages]);
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
-  }, [refreshOrders]);
+  }, [refreshOrders, chatSessionId, welcomeChatMessage]);
 
   useEffect(() => {
     localStorage.setItem('myrlan_products', JSON.stringify(products));
@@ -457,10 +517,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProductStock = async (productId: string, newStock: number) => {
     const validatedStock = Math.max(0, newStock);
     try {
-      const res = await fetch(`/api/products/${productId}/stock`, {
+      const res = await authFetch(`/api/products/${productId}/stock`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ stock: validatedStock })
       });
       const data = await res.json();
@@ -477,10 +536,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addProduct = async (newProdData: Omit<Product, 'id' | 'rating' | 'reviewsCount'>) => {
     try {
-      const res = await fetch('/api/products', {
+      const res = await authFetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(newProdData)
       });
       const data = await res.json();
@@ -500,10 +558,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProduct = async (productId: string, updates: Partial<Product>) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, {
+      const res = await authFetch(`/api/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(updates)
       });
       const data = await res.json();
@@ -522,9 +579,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteProduct = async (productId: string) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, {
-        method: 'DELETE',
-        credentials: 'include'
+      const res = await authFetch(`/api/products/${productId}`, {
+        method: 'DELETE'
       });
       const data = await res.json();
       if (data.success) {
@@ -544,7 +600,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     address: ShippingAddress,
     paymentMethod: PaymentMethod,
     carrier: ShippingCarrier,
-    promoCode?: string
+    promoCode?: string,
+    honeypot?: string
   ): Promise<Order> => {
     const effectiveCode = promoCode || appliedPromo?.code;
     const subtotal = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
@@ -579,21 +636,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loyaltyPointsEarned: pointsEarned
     };
 
-    let finalOrder = payload;
-    try {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success && data.order) {
-        finalOrder = data.order;
-      }
-    } catch (err) {
-      console.warn('Order sync error:', err);
+    const res = await authFetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, website: honeypot || '' })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.success || !data?.order) {
+      throw new Error(data?.error || 'Impossible de valider votre commande. Vérifiez les quantités ou le mode de paiement.');
     }
+    const finalOrder: Order = data.order;
 
     setProducts(prev => {
       const updated = [...prev];
@@ -634,7 +686,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     clearCart();
-    setIsCheckoutOpen(false);
 
     fetch('/api/send-email', {
       method: 'POST',
@@ -653,10 +704,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/status`, {
+      const res = await authFetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ status })
       });
       const data = await res.json();
@@ -671,37 +721,44 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const sendChatMessage = (text: string, sender: 'user' | 'bot' | 'pharmacist' = 'user') => {
-    const newMsg: ChatMessage = {
+  const sendChatMessage = async (
+    text: string,
+    sender: 'user' | 'bot' | 'pharmacist' = 'user',
+    meta?: { visitorName?: string; visitorEmail?: string }
+  ) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    const timestamp = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const optimisticMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender,
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      senderName: sender === 'user' ? (meta?.visitorName || currentUser?.name || 'Vous') : 'Claire (Pharmacienne)',
+      text: cleanText,
+      timestamp
     };
-    setChatMessages(prev => [...prev, newMsg]);
+    setChatMessages(prev => [...prev, optimisticMsg]);
 
     if (sender === 'user') {
-      setTimeout(() => {
-        let reply = "Merci pour votre message. Un de nos pharmaciens diplômés vous répond dans les plus brefs délais. Vous pouvez également consulter nos fiches conseils sur la page Conseils Santé.";
-        const lower = text.toLowerCase();
-        if (lower.includes('livraison') || lower.includes('colis')) {
-          reply = "Nos expéditions sont traitées en 24h ouvrées. Retrouvez tous nos tarifs et délais sur la page Livraison & Retours.";
-        } else if (lower.includes('code') || lower.includes('promo')) {
-          reply = "Profitez de 10% de réduction sur votre panier avec le code promo : MYRLANE10 !";
-        } else if (lower.includes('ordonnance')) {
-          reply = "Vous pouvez envoyer votre ordonnance en ligne depuis la rubrique Ordonnance en Ligne pour un retrait Click & Collect ou une livraison.";
+      try {
+        const res = await authFetch(`/api/chat/session/${encodeURIComponent(chatSessionId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: cleanText,
+            timestamp,
+            visitorName: meta?.visitorName || currentUser?.name || userProfile.name || undefined,
+            visitorEmail: meta?.visitorEmail || currentUser?.email || userProfile.email || undefined
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.session && Array.isArray(data.session.messages)) {
+          setChatMessages([welcomeChatMessage, ...data.session.messages]);
+          localStorage.setItem('myrlan_chat_migrated', '1');
         }
-
-        setChatMessages(curr => [
-          ...curr,
-          {
-            id: `msg-${Date.now() + 1}`,
-            sender: 'pharmacist',
-            text: reply,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
-      }, 1000);
+      } catch {
+        showToast('Impossible de joindre le serveur de messagerie.');
+      }
     }
   };
 
@@ -709,10 +766,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserProfile(prev => ({ ...prev, ...profile }));
     if (persistServer && currentUser) {
       try {
-        const res = await fetch('/api/account/profile', {
+        const res = await authFetch('/api/account/profile', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify(profile)
         });
         const data = await res.json();
@@ -760,7 +816,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isFaqOpen,
         isLegalOpen,
         isAccountOpen,
-        isSidebarDrawerOpen,
         selectedProductForDetail,
         toastMessage,
         navigate,
@@ -779,7 +834,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsFaqOpen,
         setIsLegalOpen,
         setIsAccountOpen,
-        setIsSidebarDrawerOpen,
         setSelectedProductForDetail,
         setIsAdminMode,
         addToCart,

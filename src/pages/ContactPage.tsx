@@ -15,6 +15,7 @@ export const ContactPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [honeypotWebsite, setHoneypotWebsite] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +24,7 @@ export const ContactPage: React.FC = () => {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, subject, message })
+        body: JSON.stringify({ name, email, phone, subject, message, website: honeypotWebsite })
       });
       const data = await res.json();
       if (data.success) {
@@ -144,6 +145,19 @@ export const ContactPage: React.FC = () => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <h2 className="font-black text-gray-900 text-lg mb-2">Formulaire de contact</h2>
+
+              <div className="sr-only" aria-hidden="true">
+                <label htmlFor="contact-website">Site web</label>
+                <input
+                  id="contact-website"
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={honeypotWebsite}
+                  onChange={(e) => setHoneypotWebsite(e.target.value)}
+                />
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

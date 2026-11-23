@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, User, Lock, Mail, KeyRound, UserPlus, LogIn, LogOut, ShieldCheck, Package, MapPin } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { setAuthToken } from '../utils/authToken';
 
 export const AccountModal: React.FC = () => {
   const {
@@ -14,11 +15,13 @@ export const AccountModal: React.FC = () => {
   const [name, setName] = useState('');
   const [skinType, setSkinType] = useState(userProfile.skinType || 'Mixte à sensible');
   const [editName, setEditName] = useState(currentUser?.name || '');
+  const [authError, setAuthError] = useState('');
 
   if (!isAccountOpen) return null;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -28,6 +31,7 @@ export const AccountModal: React.FC = () => {
       });
       const data = await res.json();
       if (data.success && data.user) {
+        if (data.token) setAuthToken(data.token);
         setCurrentUser(data.user);
         if (data.user.role === 'admin') {
           setIsAdminMode(true);
@@ -38,10 +42,14 @@ export const AccountModal: React.FC = () => {
         }
         setIsAccountOpen(false);
       } else {
-        showToast(data.error || 'Email ou mot de passe incorrect.');
+        const msg = data.error || 'Email ou mot de passe incorrect.';
+        setAuthError(msg);
+        showToast(msg);
       }
     } catch {
-      showToast('Erreur de connexion au serveur.');
+      const msg = 'Erreur de connexion au serveur.';
+      setAuthError(msg);
+      showToast(msg);
     }
   };
 
@@ -56,6 +64,7 @@ export const AccountModal: React.FC = () => {
       });
       const data = await res.json();
       if (data.success && data.user) {
+        if (data.token) setAuthToken(data.token);
         setCurrentUser(data.user);
         setIsAdminMode(false);
         showToast('Compte client créé avec succès !');
@@ -270,12 +279,25 @@ export const AccountModal: React.FC = () => {
                   </div>
                 </div>
 
+                {authError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium">
+                    {authError}
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center gap-2"
                 >
                   <LogIn className="w-4 h-4" /> Se connecter
                 </button>
+
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="text-slate-900">Protection anti-phishing :</strong> vérifiez l’adresse officielle avant toute saisie. L’équipe Myrlan ne demande jamais votre mot de passe par email, SMS ou téléphone.
+                  </span>
+                </div>
               </form>
             )}
 
@@ -306,7 +328,7 @@ export const AccountModal: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mot de passe (6+ caractères)</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mot de passe (8+ caractères recommandés)</label>
                   <input
                     type="password"
                     required
@@ -316,6 +338,15 @@ export const AccountModal: React.FC = () => {
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
                     placeholder="••••••••"
                   />
+                  {password.length > 0 && (
+                    <p className={`text-[11px] mt-1 font-medium ${password.length >= 10 ? 'text-emerald-700' : password.length >= 8 ? 'text-blue-700' : 'text-amber-700'}`}>
+                      {password.length >= 10
+                        ? 'Robustesse élevée'
+                        : password.length >= 8
+                          ? 'Robustesse correcte (10+ caractères conseillés)'
+                          : 'Mot de passe trop court — évitez les suites simples (123456, azerty)'}
+                    </p>
+                  )}
                 </div>
 
                 <div>

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ArrowLeft, Star, ShoppingBag, Heart, ShieldCheck, CheckCircle,
   AlertTriangle, Share2, Truck, MessageSquare, Sparkles,
-  FlaskConical, Leaf, Microscope, Barcode, Package, Layers, Droplet
+  FlaskConical, Leaf, Microscope, Barcode, Package, Layers, Droplet, Calendar
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Product } from '../types';
 import { AddReviewModal } from './AddReviewModal';
+import { analyzeProductSafety } from '../utils/pharmacySafety';
 
 interface ProductPageProps {
   product: Product;
@@ -17,6 +18,8 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
   const { addToCart, wishlist, toggleWishlist, products, setSelectedProductForDetail, showToast, navigate } = useShop();
   const [quantity, setQuantity] = useState(1);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+
+  const safetySummary = useMemo(() => analyzeProductSafety(product, 'standard'), [product]);
 
   const isWishlisted = wishlist.includes(product.id);
   const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 3);
@@ -250,6 +253,58 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
               <Leaf className="w-5 h-5" /> Rituel &amp; Posologie
             </div>
             <p className="text-xs text-gray-700 leading-relaxed">{product.usage}</p>
+          </div>
+        </div>
+
+        {/* Pharmacist Safety & Compatibility Check */}
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-blue-700 shrink-0" />
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Contrôle Officinal de Compatibilité &amp; Précautions</h2>
+                <p className="text-xs text-slate-500">Vérification basée sur la formule INCI et l’usage pharmaceutique</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => navigate('/diagnostic')}
+                className="px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl whitespace-nowrap"
+              >
+                Tester dans ma routine
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/rendez-vous')}
+                className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Avis pharmacien en RDV</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-1">
+              <div className="font-bold text-slate-900">
+                Grossesse &amp; Allaitement :{' '}
+                <span className={safetySummary.pregnancyStatus === 'compatible' ? 'text-emerald-700' : 'text-amber-700'}>
+                  {safetySummary.pregnancyStatus === 'compatible' ? 'Compatible' : 'Demander avis'}
+                </span>
+              </div>
+              <p className="text-slate-600 leading-relaxed">{safetySummary.pregnancyNote}</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-1">
+              <div className="font-bold text-slate-900">Âge recommandé : {safetySummary.minimumAgeLabel}</div>
+              <p className="text-slate-600 leading-relaxed">Respectez la posologie et le mode d’application indiqués par l’officine.</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-1">
+              <div className="font-bold text-slate-900">Tolérance peau sensible</div>
+              <p className="text-slate-600 leading-relaxed">{safetySummary.sensitiveSkinNote}</p>
+            </div>
           </div>
         </div>
 

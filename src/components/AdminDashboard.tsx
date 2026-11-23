@@ -3,23 +3,32 @@ import {
   LayoutDashboard, Package, ShoppingBag, Users, Tag, FileText, Mail,
   Plus, Search, Edit, Trash2, ShieldCheck, AlertTriangle, TrendingUp,
   Store, LogOut, LogIn, X, CheckCircle, ExternalLink, ChevronRight,
-  Menu, Eye, Printer, ArrowUpRight, Filter, Euro, BarChart3
+  Menu, Eye, Printer, ArrowUpRight, Filter, Euro, BarChart3,
+  MessageCircle, Send, Globe, Calendar, ShieldAlert, Download, Lock
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 import { useShop } from '../context/ShopContext';
 import { CATEGORIES } from '../data/mockProducts';
-import { Product, Order, AdminUserSummary, Prescription, ContactMessage } from '../types';
+import { Product, Order, AdminUserSummary, Prescription, ContactMessage, ChatSession, PharmacyAppointment } from '../types';
 import { AdminAnalyticsCharts } from './AdminAnalyticsCharts';
 import { AdminStockDashboard } from './AdminStockDashboard';
+import { AdminWebmasterDashboard } from './AdminWebmasterDashboard';
+import { AdminAppointmentsDashboard } from './AdminAppointmentsDashboard';
+import { AdminSecurityDashboard } from './AdminSecurityDashboard';
+import { authFetch } from '../utils/authToken';
 
 type AdminTab =
   | 'overview'
   | 'orders'
   | 'prescriptions'
+  | 'appointments'
   | 'stock_levels'
   | 'inventory'
   | 'promos'
   | 'users'
-  | 'messages';
+  | 'messages'
+  | 'webmaster'
+  | 'security';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -49,18 +58,26 @@ export const AdminDashboard: React.FC = () => {
   const [rxStatusFilter, setRxStatusFilter] = useState<string>('Toutes');
   const [selectedRx, setSelectedRx] = useState<Prescription | null>(null);
   const [rxNoteInput, setRxNoteInput] = useState('');
+  const [previewRxDoc, setPreviewRxDoc] = useState<{ rx: Prescription; blobUrl: string; contentType: string } | null>(null);
+  const [loadingRxDocId, setLoadingRxDocId] = useState<string | null>(null);
 
   // Users filters
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'customer' | 'admin'>('all');
 
-  // Messages inbox
+  // Messages inbox (Live Chat + Contact Form)
+  const [messagesSubTab, setMessagesSubTab] = useState<'chat' | 'contact'>('chat');
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [chatReplyInput, setChatReplyInput] = useState('');
+  const [isSendingChatReply, setIsSendingChatReply] = useState(false);
 
   // Server data collections
   const [adminUsers, setAdminUsers] = useState<AdminUserSummary[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [appointments, setAppointments] = useState<PharmacyAppointment[]>([]);
 
   // Promo form
   const [newPromo, setNewPromo] = useState({ code: '', discountPercent: 15, minOrder: 0, description: '' });
@@ -89,17 +106,17 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
 
-    fetch('/api/admin/users', { credentials: 'include' })
+    authFetch('/api/admin/users')
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setAdminUsers(d); })
       .catch(() => {});
 
-    fetch('/api/prescriptions', { credentials: 'include' })
+    authFetch('/api/prescriptions')
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPrescriptions(d); })
       .catch(() => {});
 
-    fetch('/api/contact', { credentials: 'include' })
+    authFetch('/api/contact')
       .then(r => r.json())
       .then(d => {
         if (Array.isArray(d)) {
@@ -108,7 +125,60 @@ export const AdminDashboard: React.FC = () => {
         }
       })
       .catch(() => {});
+
+    authFetch('/api/admin/chat')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          setChatSessions(d);
+          if (d.length > 0) setSelectedChatId(prev => prev || d[0].id);
+        }
+      })
+      .catch(() => {});
+
+    authFetch('/api/admin/appointments')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) setAppointments(d);
+      })
+      .catch(() => {});
   }, [currentUser, orders.length]);
+
+  // Live Socket.IO sync for Admin Inbox & Prescriptions
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const socket = io();
+
+    socket.on('chat-sessions-updated', (updatedChats: ChatSession[]) => {
+      if (Array.isArray(updatedChats)) {
+        setChatSessions(updatedChats);
+        if (updatedChats.length > 0) {
+          setSelectedChatId(prev => prev || updatedChats[0].id);
+        }
+      }
+    });
+
+    socket.on('contacts-updated', (updatedContacts: ContactMessage[]) => {
+      if (Array.isArray(updatedContacts)) {
+        setContactMessages(updatedContacts);
+        if (updatedContacts.length > 0) {
+          setSelectedMessageId(prev => prev || updatedContacts[0].id);
+        }
+      }
+    });
+
+    socket.on('prescriptions-updated', (updatedRx: Prescription[]) => {
+      if (Array.isArray(updatedRx)) setPrescriptions(updatedRx);
+    });
+
+    socket.on('appointments-updated', (updatedAppts: PharmacyAppointment[]) => {
+      if (Array.isArray(updatedAppts)) setAppointments(updatedAppts);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [currentUser]);
 
   // Keep selectedOrder synced when status updates
   useEffect(() => {
@@ -125,7 +195,10 @@ export const AdminDashboard: React.FC = () => {
   const lowStockProducts = useMemo(() => products.filter(p => p.stock <= 5), [products]);
   const restockWatchCount = useMemo(() => products.filter(p => p.stock <= 15).length, [products]);
   const pendingRxCount = useMemo(() => prescriptions.filter(p => p.status === 'En attente').length, [prescriptions]);
-  const unreadMessagesCount = useMemo(() => contactMessages.filter(m => m.status === 'Nouveau').length, [contactMessages]);
+  const confirmedApptsCount = useMemo(() => appointments.filter(a => a.status === 'Confirmé').length, [appointments]);
+  const unreadContactCount = useMemo(() => contactMessages.filter(m => m.status === 'Nouveau').length, [contactMessages]);
+  const unreadChatCount = useMemo(() => chatSessions.reduce((sum, s) => sum + (Number(s.unreadByAdmin) || 0), 0), [chatSessions]);
+  const unreadMessagesCount = unreadContactCount + unreadChatCount;
 
   // Filtered lists
   const filteredInventory = useMemo(() => {
@@ -183,6 +256,11 @@ export const AdminDashboard: React.FC = () => {
     [contactMessages, selectedMessageId]
   );
 
+  const activeChatSession = useMemo(
+    () => chatSessions.find(s => s.id === selectedChatId) || chatSessions[0] || null,
+    [chatSessions, selectedChatId]
+  );
+
   // Unauthenticated / Non-admin Gate
   if (currentUser?.role !== 'admin') {
     return (
@@ -222,7 +300,7 @@ export const AdminDashboard: React.FC = () => {
     const formData = new FormData();
     formData.append('image', file);
     try {
-      const res = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: formData });
+      const res = await authFetch('/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.success && data.url) {
         showToast('Image enregistrée sur le serveur.');
@@ -270,10 +348,9 @@ export const AdminDashboard: React.FC = () => {
   const handleCreatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/promos', {
+      const res = await authFetch('/api/promos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(newPromo)
       });
       const data = await res.json();
@@ -289,25 +366,23 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleTogglePromo = async (id: string, active: boolean) => {
-    await fetch(`/api/promos/${id}`, {
+    await authFetch(`/api/promos/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ active })
     });
   };
 
   const handleDeletePromo = async (id: string) => {
-    await fetch(`/api/promos/${id}`, { method: 'DELETE', credentials: 'include' });
+    await authFetch(`/api/promos/${id}`, { method: 'DELETE' });
     showToast('Code promo supprimé.');
   };
 
   const handleUpdatePrescription = async (id: string, status: Prescription['status'], pharmacistNote?: string) => {
     try {
-      const res = await fetch(`/api/prescriptions/${id}`, {
+      const res = await authFetch(`/api/prescriptions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ status, pharmacistNote })
       });
       const data = await res.json();
@@ -321,18 +396,106 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const closeRxDocPreview = () => {
+    if (previewRxDoc?.blobUrl) {
+      URL.revokeObjectURL(previewRxDoc.blobUrl);
+    }
+    setPreviewRxDoc(null);
+  };
+
+  const handleOpenRxFile = async (rx: Prescription) => {
+    setLoadingRxDocId(rx.id);
+    try {
+      const res = await authFetch(`/api/prescriptions/${encodeURIComponent(rx.id)}/file`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || 'Document d’ordonnance inaccessible.');
+        return;
+      }
+      const blob = await res.blob();
+      const contentType = res.headers.get('content-type') || blob.type || '';
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewRxDoc({ rx, blobUrl, contentType });
+    } catch {
+      showToast('Erreur réseau lors du chargement du document médical.');
+    } finally {
+      setLoadingRxDocId(null);
+    }
+  };
+
   const handleMarkMessageRead = async (id: string) => {
     try {
-      const res = await fetch(`/api/contact/${id}`, {
+      const res = await authFetch(`/api/contact/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ status: 'Traité' })
       });
       const data = await res.json();
       if (data.success) {
         setContactMessages(prev => prev.map(m => m.id === id ? data.contactMessage : m));
         showToast('Demande marquée comme traitée.');
+      }
+    } catch {
+      showToast('Erreur réseau.');
+    }
+  };
+
+  const handleSelectChatSession = async (session: ChatSession) => {
+    setSelectedChatId(session.id);
+    if (session.unreadByAdmin > 0) {
+      try {
+        const res = await authFetch(`/api/admin/chat/${encodeURIComponent(session.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markRead: true })
+        });
+        const data = await res.json();
+        if (data.success && data.session) {
+          setChatSessions(prev => prev.map(s => s.id === session.id ? data.session : s));
+        }
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const handleSendChatReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChatSession || !chatReplyInput.trim() || isSendingChatReply) return;
+    setIsSendingChatReply(true);
+    try {
+      const res = await authFetch(`/api/admin/chat/${encodeURIComponent(activeChatSession.id)}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: chatReplyInput.trim() })
+      });
+      const data = await res.json();
+      if (data.success && data.session) {
+        setChatReplyInput('');
+        setChatSessions(prev => [data.session, ...prev.filter(s => s.id !== data.session.id)]);
+        showToast('Réponse envoyée au patient en direct.');
+      } else {
+        showToast(data.error || 'Erreur lors de l’envoi de la réponse.');
+      }
+    } catch {
+      showToast('Erreur réseau.');
+    } finally {
+      setIsSendingChatReply(false);
+    }
+  };
+
+  const handleToggleChatStatus = async (session: ChatSession) => {
+    const nextStatus = session.status === 'Ouvert' ? 'Résolu' : 'Ouvert';
+    try {
+      const res = await authFetch(`/api/admin/chat/${encodeURIComponent(session.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus, markRead: true })
+      });
+      const data = await res.json();
+      if (data.success && data.session) {
+        setChatSessions(prev => prev.map(s => s.id === session.id ? data.session : s));
+        showToast(`Conversation marquée : ${nextStatus}`);
       }
     } catch {
       showToast('Erreur réseau.');
@@ -351,6 +514,7 @@ export const AdminDashboard: React.FC = () => {
       items: [
         { id: 'orders', label: 'Commandes', icon: <Package className="w-4 h-4" />, badge: pendingOrdersCount, badgeColor: 'bg-blue-100 text-blue-800' },
         { id: 'prescriptions', label: 'Ordonnances', icon: <FileText className="w-4 h-4" />, badge: pendingRxCount, badgeColor: 'bg-amber-100 text-amber-800' },
+        { id: 'appointments', label: 'Rendez-vous', icon: <Calendar className="w-4 h-4" />, badge: confirmedApptsCount, badgeColor: 'bg-blue-100 text-blue-800' },
         { id: 'messages', label: 'Messages Patients', icon: <Mail className="w-4 h-4" />, badge: unreadMessagesCount, badgeColor: 'bg-rose-100 text-rose-700' }
       ]
     },
@@ -367,6 +531,13 @@ export const AdminDashboard: React.FC = () => {
       items: [
         { id: 'users', label: 'Clients & Comptes', icon: <Users className="w-4 h-4" /> }
       ]
+    },
+    {
+      title: 'Webmaster & Sécurité',
+      items: [
+        { id: 'webmaster', label: 'Sitemap & SEO', icon: <Globe className="w-4 h-4" /> },
+        { id: 'security', label: 'Sécurité & Pare-feu', icon: <ShieldAlert className="w-4 h-4" /> }
+      ]
     }
   ];
 
@@ -374,11 +545,14 @@ export const AdminDashboard: React.FC = () => {
     overview: 'Vue d’ensemble',
     orders: 'Commandes & Expéditions',
     prescriptions: 'Ordonnances Patients',
+    appointments: 'Rendez-vous & Actes Officinaux',
     stock_levels: 'Niveaux de stock & Réapprovisionnement',
     inventory: 'Catalogue & Stocks',
     promos: 'Codes Promo & Remises',
     users: 'Clients & Comptes',
-    messages: 'Messages Patients'
+    messages: 'Messages Patients',
+    webmaster: 'Outils Webmaster & SEO',
+    security: 'Sécurité, Pare-feu & Anti-Phishing'
   };
 
   const statusBadgeClass = (status: string) => {
@@ -698,13 +872,26 @@ export const AdminDashboard: React.FC = () => {
                           </button>
                         )}
 
-                        {unreadMessagesCount > 0 && (
+                        {unreadChatCount > 0 && (
                           <button
-                            onClick={() => setActiveTab('messages')}
+                            onClick={() => { setMessagesSubTab('chat'); setActiveTab('messages'); }}
+                            className="w-full p-3 rounded-lg border border-blue-200 bg-blue-50/70 text-left flex items-center justify-between hover:bg-blue-100/70 transition-colors"
+                          >
+                            <div>
+                              <div className="text-xs font-bold text-blue-950">{unreadChatCount} message(s) Tchat en direct</div>
+                              <div className="text-[11px] text-blue-700">Répondre au patient maintenant</div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-blue-600" />
+                          </button>
+                        )}
+
+                        {unreadContactCount > 0 && (
+                          <button
+                            onClick={() => { setMessagesSubTab('contact'); setActiveTab('messages'); }}
                             className="w-full p-3 rounded-lg border border-slate-200 bg-slate-50 text-left flex items-center justify-between hover:bg-slate-100 transition-colors"
                           >
                             <div>
-                              <div className="text-xs font-bold text-slate-900">{unreadMessagesCount} message(s) patient non lu(s)</div>
+                              <div className="text-xs font-bold text-slate-900">{unreadContactCount} demande(s) formulaire contact</div>
                               <div className="text-[11px] text-slate-600">Ouvrir la messagerie</div>
                             </div>
                             <ChevronRight className="w-4 h-4 text-slate-500" />
@@ -1017,15 +1204,16 @@ export const AdminDashboard: React.FC = () => {
                             {rx.deliveryMode === 'click_and_collect' ? 'Click & Collect' : 'Livraison'}
                           </td>
                           <td className="py-3 px-4">
-                            <a
-                              href={rx.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-700 hover:underline font-semibold inline-flex items-center gap-1"
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRxFile(rx)}
+                              disabled={loadingRxDocId === rx.id}
+                              className="text-blue-700 hover:underline font-semibold inline-flex items-center gap-1 disabled:opacity-60"
                             >
-                              <span>{rx.fileName}</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                              <Lock className="w-3 h-3 text-emerald-600" />
+                              <span>{loadingRxDocId === rx.id ? 'Ouverture...' : rx.fileName}</span>
+                              <Eye className="w-3 h-3" />
+                            </button>
                           </td>
                           <td className="py-3 px-4">
                             <span className={`px-2.5 py-0.5 rounded border text-[11px] font-semibold ${statusBadgeClass(rx.status)}`}>
@@ -1235,76 +1423,266 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* ========================================================== */}
-          {/* VIEW 7: MESSAGES INBOX                                     */}
+          {/* VIEW 7: MESSAGES & LIVE CHAT INBOX                         */}
           {/* ========================================================== */}
           {activeTab === 'messages' && (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[460px]">
-              {/* Left Message List */}
-              <div className="lg:col-span-5 min-w-0 border-b lg:border-b-0 lg:border-r border-slate-200 divide-y divide-slate-100 max-h-[540px] overflow-y-auto">
-                {contactMessages.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400">Aucun message reçu.</div>
-                ) : (
-                  contactMessages.map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => setSelectedMessageId(m.id)}
-                      className={`w-full text-left p-4 hover:bg-slate-50 transition-colors space-y-1 ${
-                        activeMessage?.id === m.id ? 'bg-blue-50/60' : ''
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
-                          {m.status === 'Nouveau' && <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />}
-                          {m.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono shrink-0">{m.createdAt}</span>
-                      </div>
-                      <div className="text-xs font-semibold text-blue-800 truncate">{m.subject}</div>
-                      <div className="text-[11px] text-slate-500 line-clamp-1">{m.message}</div>
-                    </button>
-                  ))
-                )}
+            <div className="space-y-4">
+              {/* Sub-tab Switcher: Live Chat vs Contact Form */}
+              <div className="bg-white border border-slate-200 rounded-xl p-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setMessagesSubTab('chat')}
+                  className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+                    messagesSubTab === 'chat'
+                      ? 'bg-blue-700 text-white'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Tchat en direct ({chatSessions.length})</span>
+                  {unreadChatCount > 0 && (
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] tabular-nums ${messagesSubTab === 'chat' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'}`}>
+                      {unreadChatCount} non lu(s)
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setMessagesSubTab('contact')}
+                  className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+                    messagesSubTab === 'contact'
+                      ? 'bg-blue-700 text-white'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Formulaire Contact ({contactMessages.length})</span>
+                  {unreadContactCount > 0 && (
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] tabular-nums ${messagesSubTab === 'contact' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'}`}>
+                      {unreadContactCount} nouveau(x)
+                    </span>
+                  )}
+                </button>
               </div>
 
-              {/* Right Reading Pane */}
-              <div className="lg:col-span-7 p-6 flex flex-col justify-between">
-                {!activeMessage ? (
-                  <div className="flex-1 flex items-center justify-center text-xs text-slate-400">
-                    Sélectionnez un message pour le consulter.
+              {messagesSubTab === 'chat' ? (
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[500px]">
+                  {/* Left Chat Sessions List */}
+                  <div className="lg:col-span-4 min-w-0 border-b lg:border-b-0 lg:border-r border-slate-200 divide-y divide-slate-100 max-h-[300px] lg:max-h-[560px] overflow-y-auto">
+                    {chatSessions.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400">
+                        Aucune conversation tchat reçue pour le moment.
+                      </div>
+                    ) : (
+                      chatSessions.map(sess => {
+                        const lastMsg = sess.messages[sess.messages.length - 1];
+                        return (
+                          <button
+                            key={sess.id}
+                            onClick={() => handleSelectChatSession(sess)}
+                            className={`w-full text-left p-4 hover:bg-slate-50 transition-colors space-y-1.5 ${
+                              activeChatSession?.id === sess.id ? 'bg-blue-50/70' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                                {sess.unreadByAdmin > 0 && <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0" />}
+                                <span className="truncate">{sess.visitorName}</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">{sess.updatedAt}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${
+                                sess.status === 'Résolu'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}>
+                                {sess.status}
+                              </span>
+                              {sess.unreadByAdmin > 0 && (
+                                <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold tabular-nums">
+                                  {sess.unreadByAdmin} nouveau(x)
+                                </span>
+                              )}
+                            </div>
+                            {lastMsg && (
+                              <div className="text-[11px] text-slate-500 line-clamp-1">
+                                <strong>{lastMsg.sender === 'user' ? 'Patient' : 'Officine'} :</strong> {lastMsg.text}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
-                      <div>
-                        <span className={`px-2.5 py-0.5 rounded border text-[10px] font-bold ${statusBadgeClass(activeMessage.status)}`}>
-                          {activeMessage.status}
-                        </span>
-                        <h3 className="text-lg font-bold text-slate-900 mt-2">{activeMessage.subject}</h3>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          De <strong>{activeMessage.name}</strong> ({activeMessage.email}{activeMessage.phone ? ` • ${activeMessage.phone}` : ''})
+
+                  {/* Right Live Chat Conversation Thread */}
+                  <div className="lg:col-span-8 min-w-0 flex flex-col h-[520px] lg:h-[560px]">
+                    {!activeChatSession ? (
+                      <div className="flex-1 flex items-center justify-center text-xs text-slate-400 p-6 text-center">
+                        Sélectionnez une conversation tchat à gauche pour lire les messages et répondre au patient en direct.
+                      </div>
+                    ) : (
+                      <>
+                        {/* Thread Header */}
+                        <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                          <div className="min-w-0">
+                            <div className="font-bold text-sm text-slate-900 truncate">{activeChatSession.visitorName}</div>
+                            <div className="text-[11px] text-slate-500 truncate">
+                              {activeChatSession.visitorEmail || 'Visiteur anonyme'} • Session <span className="font-mono">{activeChatSession.id}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleToggleChatStatus(activeChatSession)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                              activeChatSession.status === 'Résolu'
+                                ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                                : 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700'
+                            }`}
+                          >
+                            {activeChatSession.status === 'Résolu' ? 'Réouvrir la discussion' : 'Marquer comme résolu'}
+                          </button>
+                        </div>
+
+                        {/* Thread Messages */}
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-slate-50/40">
+                          {activeChatSession.messages.map(msg => (
+                            <div
+                              key={msg.id}
+                              className={`flex ${msg.sender === 'pharmacist' ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
+                                msg.sender === 'pharmacist'
+                                  ? 'bg-blue-700 text-white rounded-br-xs'
+                                  : msg.sender === 'bot'
+                                    ? 'bg-slate-100 text-slate-600 border border-slate-200 italic'
+                                    : 'bg-white text-slate-900 border border-slate-200 shadow-xs rounded-bl-xs'
+                              }`}>
+                                <div className="text-[10px] font-bold opacity-80 mb-0.5">
+                                  {msg.senderName || (msg.sender === 'user' ? activeChatSession.visitorName : 'Officine Myrlan')}
+                                </div>
+                                <p className="whitespace-pre-wrap">{msg.text}</p>
+                                <div className="text-[9px] text-right mt-1 opacity-70">{msg.timestamp}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Pharmacist Live Reply Input */}
+                        <form onSubmit={handleSendChatReply} className="p-3 sm:p-4 border-t border-slate-200 bg-white flex gap-2 shrink-0">
+                          <input
+                            type="text"
+                            value={chatReplyInput}
+                            onChange={(e) => setChatReplyInput(e.target.value)}
+                            placeholder="Répondre au patient en direct..."
+                            className="flex-1 min-w-0 px-3.5 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          />
+                          <button
+                            type="submit"
+                            disabled={isSendingChatReply || !chatReplyInput.trim()}
+                            className="px-4 py-2 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 shrink-0"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Envoyer</span>
+                          </button>
+                        </form>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[460px]">
+                  {/* Left Contact Message List */}
+                  <div className="lg:col-span-5 min-w-0 border-b lg:border-b-0 lg:border-r border-slate-200 divide-y divide-slate-100 max-h-[540px] overflow-y-auto">
+                    {contactMessages.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400">Aucun message reçu via le formulaire de contact.</div>
+                    ) : (
+                      contactMessages.map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => setSelectedMessageId(m.id)}
+                          className={`w-full text-left p-4 hover:bg-slate-50 transition-colors space-y-1 ${
+                            activeMessage?.id === m.id ? 'bg-blue-50/60' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                              {m.status === 'Nouveau' && <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />}
+                              {m.name}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono shrink-0">{m.createdAt}</span>
+                          </div>
+                          <div className="text-xs font-semibold text-blue-800 truncate">{m.subject}</div>
+                          <div className="text-[11px] text-slate-500 line-clamp-1">{m.message}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Right Contact Reading Pane */}
+                  <div className="lg:col-span-7 min-w-0 p-6 flex flex-col justify-between">
+                    {!activeMessage ? (
+                      <div className="flex-1 flex items-center justify-center text-xs text-slate-400">
+                        Sélectionnez un message pour le consulter.
+                      </div>
+                    ) : (
+                      <div className="space-y-5">
+                        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
+                          <div>
+                            <span className={`px-2.5 py-0.5 rounded border text-[10px] font-bold ${statusBadgeClass(activeMessage.status)}`}>
+                              {activeMessage.status}
+                            </span>
+                            <h3 className="text-lg font-bold text-slate-900 mt-2">{activeMessage.subject}</h3>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              De <strong>{activeMessage.name}</strong> ({activeMessage.email}{activeMessage.phone ? ` • ${activeMessage.phone}` : ''})
+                            </div>
+                          </div>
+                          <span className="text-xs font-mono text-slate-400">{activeMessage.createdAt}</span>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                          {activeMessage.message}
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+                          {activeMessage.status === 'Nouveau' && (
+                            <button
+                              onClick={() => handleMarkMessageRead(activeMessage.id)}
+                              className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Marquer comme traité
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <span className="text-xs font-mono text-slate-400">{activeMessage.createdAt}</span>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                      {activeMessage.message}
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-                      {activeMessage.status === 'Nouveau' && (
-                        <button
-                          onClick={() => handleMarkMessageRead(activeMessage.id)}
-                          className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5" /> Marquer comme traité
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
+          )}
+
+          {/* ========================================================== */}
+          {/* VIEW 8: WEBMASTER & SEO TOOLS                              */}
+          {/* ========================================================== */}
+          {activeTab === 'webmaster' && (
+            <AdminWebmasterDashboard
+              products={products}
+              onEditProduct={(product) => setEditingProduct(product)}
+              showToast={showToast}
+            />
+          )}
+
+          {/* ========================================================== */}
+          {/* VIEW 9: PHARMACY APPOINTMENTS                              */}
+          {/* ========================================================== */}
+          {activeTab === 'appointments' && (
+            <AdminAppointmentsDashboard showToast={showToast} />
+          )}
+
+          {/* ========================================================== */}
+          {/* VIEW 10: SECURITY, FIREWALL & ANTI-PHISHING                */}
+          {/* ========================================================== */}
+          {activeTab === 'security' && (
+            <AdminSecurityDashboard showToast={showToast} />
           )}
 
         </main>
@@ -1430,15 +1808,19 @@ export const AdminDashboard: React.FC = () => {
               )}
 
               <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200">
-                <span className="font-semibold text-slate-700 truncate">{selectedRx.fileName}</span>
-                <a
-                  href={selectedRx.fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 bg-slate-900 text-white font-semibold rounded-lg inline-flex items-center gap-1.5 shrink-0"
+                <span className="font-semibold text-slate-700 truncate flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="truncate">{selectedRx.fileName}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleOpenRxFile(selectedRx)}
+                  disabled={loadingRxDocId === selectedRx.id}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-blue-700 text-white font-semibold rounded-lg inline-flex items-center gap-1.5 shrink-0 disabled:opacity-60"
                 >
-                  <ExternalLink className="w-3.5 h-3.5" /> Ouvrir le document
-                </a>
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>{loadingRxDocId === selectedRx.id ? 'Chargement...' : 'Consulter le document'}</span>
+                </button>
               </div>
 
               <div>
@@ -1643,6 +2025,57 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* MODAL: SECURE PRESCRIPTION DOCUMENT VIEWER                         */}
+      {/* ================================================================== */}
+      {previewRxDoc && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase text-emerald-700 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" /> Document médical protégé • {previewRxDoc.rx.id}
+                </div>
+                <div className="text-sm font-bold text-slate-900 truncate">
+                  {previewRxDoc.rx.patientName} — {previewRxDoc.rx.fileName}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={previewRxDoc.blobUrl}
+                  download={previewRxDoc.rx.fileName}
+                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger
+                </a>
+                <button
+                  type="button"
+                  onClick={closeRxDocPreview}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-100 p-4 flex items-center justify-center min-h-[380px]">
+              {previewRxDoc.contentType.includes('pdf') || previewRxDoc.rx.fileName.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={previewRxDoc.blobUrl}
+                  title={previewRxDoc.rx.fileName}
+                  className="w-full h-[68vh] rounded-xl border border-slate-200 bg-white"
+                />
+              ) : (
+                <img
+                  src={previewRxDoc.blobUrl}
+                  alt={previewRxDoc.rx.fileName}
+                  className="max-w-full max-h-[68vh] object-contain rounded-xl shadow-sm bg-white"
+                />
+              )}
+            </div>
           </div>
         </div>
       )}

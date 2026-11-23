@@ -272,5 +272,58 @@
   ],
   "prescriptions": [],
   "contactMessages": [],
-  "resetTokens": []
+  "resetTokens": [],
+  "chatSessions": [
+    {
+      "id": "sess-mwroeckf-gla91c",
+      "visitorName": "Visiteur #A91C",
+      "visitorEmail": "",
+      "status": "Ouvert",
+      "unreadByAdmin": 1,
+      "updatedAt": "2026-11-22 10:10",
+      "messages": [
+        {
+          "id": "chat-1795342212245-ed5f96",
+          "sender": "user",
+          "senderName": "Visiteur #A91C",
+          "text": "Allo",
+          "timestamp": "11:04",
+          "createdAt": "2026-11-22 10:10"
+        },
+        {
+          "id": "chat-ack-1795342212245",
+          "sender": "bot",
+          "senderName": "Assistant Myrlan",
+          "text": "Merci pour votre message. Il vient d'être transmis à notre équipe officinale ; un pharmacien vous répondra ici même dans les plus brefs délais.",
+          "timestamp": "10:10",
+          "createdAt": "2026-11-22 10:10"
+        }
+      ]
+    }
+  ],
+  "webmaster": {
+    "siteTitle": "Myrlan - Parapharmacie & Soins en Ligne",
+    "siteDescription": "Votre parapharmacie en ligne de confiance : soins dermo-cosmétiques, compléments alimentaires, conseils de pharmaciens et Click & Collect.",
+    "canonicalBaseUrl": "",
+    "ogImageUrl": "",
+    "googleSiteVerification": "",
+    "bingSiteVerification": "",
+    "gaMeasurementId": "",
+    "robotsTxt": "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /compte\nDisallow: /commandes\nDisallow: /reset-password\nDisallow: /api/\n\nSitemap: {{SITEMAP_URL}}",
+    "sitemapIncludeProducts": true,
+    "sitemapChangeFreq": "weekly",
+    "enablePharmacyJsonLd": true,
+    "enableProductJsonLd": true,
+    "redirects": [],
+    "updatedAt": "2026-11-23"
+  },
+  "appointments": [],
+  "securityLogs": [],
+  "securityConfig": {
+    "tokenEpoch": 1,
+    "maxCodGuestAmount": 250,
+    "maxOrderQtyPerItem": 10,
+    "maxOrderTotalItems": 30,
+    "officialDomain": ""
+  }
 }

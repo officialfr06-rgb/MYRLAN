@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   FileText, Upload, ShieldCheck, CheckCircle, Clock, ArrowLeft,
-  Building, Truck, AlertCircle, Lock
+  Building, Truck, AlertCircle, Lock, Eye, Download, X
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { Prescription } from '../types';
+import { authFetch } from '../utils/authToken';
 
 export const PrescriptionPage: React.FC = () => {
   const { currentUser, userProfile, navigate, showToast } = useShop();
@@ -19,12 +20,14 @@ export const PrescriptionPage: React.FC = () => {
   const [submittedRx, setSubmittedRx] = useState<Prescription | null>(null);
   const [myPrescriptions, setMyPrescriptions] = useState<Prescription[]>([]);
   const [error, setError] = useState('');
+  const [previewDoc, setPreviewDoc] = useState<{ rx: Prescription; blobUrl: string; contentType: string } | null>(null);
+  const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUser) {
       setPatientName(prev => prev || currentUser.name);
       setEmail(prev => prev || currentUser.email);
-      fetch('/api/prescriptions', { credentials: 'include' })
+      authFetch('/api/prescriptions')
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setMyPrescriptions(data);
@@ -32,6 +35,33 @@ export const PrescriptionPage: React.FC = () => {
         .catch(() => {});
     }
   }, [currentUser]);
+
+  const closePreviewDoc = () => {
+    if (previewDoc?.blobUrl) {
+      URL.revokeObjectURL(previewDoc.blobUrl);
+    }
+    setPreviewDoc(null);
+  };
+
+  const handleOpenPrescriptionFile = async (rx: Prescription) => {
+    setLoadingDocId(rx.id);
+    try {
+      const res = await authFetch(`/api/prescriptions/${encodeURIComponent(rx.id)}/file`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || 'Accès refusé à cette ordonnance.');
+        return;
+      }
+      const blob = await res.blob();
+      const contentType = res.headers.get('content-type') || blob.type || '';
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewDoc({ rx, blobUrl, contentType });
+    } catch {
+      showToast('Impossible de charger le document sécurisé.');
+    } finally {
+      setLoadingDocId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +81,8 @@ export const PrescriptionPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/prescriptions', {
+      const res = await authFetch('/api/prescriptions', {
         method: 'POST',
-        credentials: 'include',
         body: formData
       });
       const data = await res.json();
@@ -287,6 +316,17 @@ export const PrescriptionPage: React.FC = () => {
                           Note pharmacien : {rx.pharmacistNote}
                         </div>
                       )}
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPrescriptionFile(rx)}
+                          disabled={loadingDocId === rx.id}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-blue-50 border border-gray-200 text-blue-800 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-60"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>{loadingDocId === rx.id ? 'Déchiffrement...' : 'Consulter mon document'}</span>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -295,6 +335,53 @@ export const PrescriptionPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Authenticated Prescription Document Preview Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase text-blue-700 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" /> Coffre médical privé • {previewDoc.rx.id}
+                </div>
+                <div className="text-sm font-bold text-slate-900 truncate">{previewDoc.rx.fileName}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={previewDoc.blobUrl}
+                  download={previewDoc.rx.fileName}
+                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger
+                </a>
+                <button
+                  type="button"
+                  onClick={closePreviewDoc}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-100 p-4 flex items-center justify-center min-h-[380px]">
+              {previewDoc.contentType.includes('pdf') || previewDoc.rx.fileName.toLowerCase().endsWith('.pdf') ? (
+                <iframe
+                  src={previewDoc.blobUrl}
+                  title={previewDoc.rx.fileName}
+                  className="w-full h-[68vh] rounded-xl border border-slate-200 bg-white"
+                />
+              ) : (
+                <img
+                  src={previewDoc.blobUrl}
+                  alt={previewDoc.rx.fileName}
+                  className="max-w-full max-h-[68vh] object-contain rounded-xl shadow-sm bg-white"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

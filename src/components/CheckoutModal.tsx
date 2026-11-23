@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShieldCheck, Lock, CheckCircle, Building, Printer, MapPin } from 'lucide-react';
+import { X, ShieldCheck, Lock, CheckCircle, Building, Printer, MapPin, AlertTriangle } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { PaymentMethod, ShippingCarrier, ShippingAddress, Order } from '../types';
 
 export const CheckoutModal: React.FC = () => {
   const {
     cart, isCheckoutOpen, setIsCheckoutOpen, createOrder, userProfile,
-    appliedPromo, navigate
+    appliedPromo, navigate, showToast
   } = useShop();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -45,6 +45,8 @@ export const CheckoutModal: React.FC = () => {
   const [cardCvc, setCardCvc] = useState('382');
   const [isProcessing, setIsProcessing] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+  const [checkoutError, setCheckoutError] = useState('');
+  const [honeypotWebsite, setHoneypotWebsite] = useState('');
 
   if (!isCheckoutOpen) return null;
 
@@ -63,10 +65,11 @@ export const CheckoutModal: React.FC = () => {
 
   const handleCompleteOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCheckoutError('');
     setIsProcessing(true);
 
     try {
-      const res = await fetch('/api/create-payment-intent', {
+      await fetch('/api/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,15 +77,17 @@ export const CheckoutModal: React.FC = () => {
           paymentMethodType: paymentMethod,
           currency: 'eur'
         })
-      });
-      await res.json();
-    } catch {
-      // ignore
-    } finally {
-      const newOrd = await createOrder(address, paymentMethod, carrier, appliedPromo?.code);
-      setIsProcessing(false);
+      }).catch(() => {});
+
+      const newOrd = await createOrder(address, paymentMethod, carrier, appliedPromo?.code, honeypotWebsite);
       setCompletedOrder(newOrd);
       setStep(3);
+    } catch (err: any) {
+      const msg = err?.message || 'Impossible de valider cette commande.';
+      setCheckoutError(msg);
+      showToast(msg);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -93,6 +98,7 @@ export const CheckoutModal: React.FC = () => {
     setIsCheckoutOpen(false);
     setStep(1);
     setCompletedOrder(null);
+    setCheckoutError('');
   };
 
   return (
@@ -388,6 +394,35 @@ export const CheckoutModal: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Anti-bot invisible honeypot field */}
+              <div className="sr-only" aria-hidden="true">
+                <label htmlFor="checkout-website">Site web (ne pas remplir)</label>
+                <input
+                  id="checkout-website"
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={honeypotWebsite}
+                  onChange={(e) => setHoneypotWebsite(e.target.value)}
+                />
+              </div>
+
+              {checkoutError && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                  <span>{checkoutError}</span>
+                </div>
+              )}
+
+              {/* Anti-phishing reassurance */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-slate-900">Vigilance anti-hameçonnage :</strong> Myrlan ne vous demandera jamais votre code PIN bancaire, votre mot de passe ou un paiement par lien SMS/WhatsApp en dehors de cette page sécurisée.
+                </div>
+              </div>
 
               {/* Order Summary box */}
               <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-1.5 text-xs tabular-nums">

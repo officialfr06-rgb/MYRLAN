@@ -92,6 +92,8 @@ export const Footer: React.FC = () => {
           <div>
             <h4 className="font-bold text-white text-sm uppercase tracking-wider mb-4">Service Client &amp; Officine</h4>
             <ul className="space-y-2.5 text-xs text-blue-300">
+              <li><button onClick={() => navigate('/diagnostic')} className="hover:text-white transition-colors text-left">Diagnostic Peau &amp; Santé</button></li>
+              <li><button onClick={() => navigate('/rendez-vous')} className="hover:text-white transition-colors text-left">Prendre RDV en Officine</button></li>
               <li><button onClick={() => navigate('/ordonnance')} className="hover:text-white transition-colors text-left">Envoyer une Ordonnance</button></li>
               <li><button onClick={() => navigate('/commandes')} className="hover:text-white transition-colors text-left">Suivi de commande &amp; Factures</button></li>
               <li><button onClick={() => navigate('/livraison-retours')} className="hover:text-white transition-colors text-left">Livraison &amp; Retours</button></li>
@@ -118,7 +120,10 @@ export const Footer: React.FC = () => {
                 <Award className="w-4 h-4 text-amber-300 shrink-0" />
                 <span>100% Produits officiels garantis</span>
               </li>
-              <li className="pt-2">
+              <li className="text-[11px] text-blue-300/90 leading-relaxed pt-1 border-t border-blue-900">
+                Anti-phishing : aucun conseiller Myrlan ne demande vos codes bancaires ou mots de passe par SMS ou téléphone.
+              </li>
+              <li className="pt-1">
                 <button onClick={() => navigate('/a-propos')} className="text-amber-300 hover:text-amber-200 font-bold underline">
                   Découvrir notre officine &amp; équipe →
                 </button>
@@ -137,6 +142,7 @@ export const Footer: React.FC = () => {
             <button onClick={() => navigate('/livraison-retours')} className="hover:text-white transition-colors">Livraison &amp; Retours</button>
             <button onClick={() => navigate('/mentions-legales')} className="hover:text-white transition-colors">Mentions Légales</button>
             <button onClick={() => navigate('/confidentialite')} className="hover:text-white transition-colors">Confidentialité &amp; Cookies</button>
+            <a href="/.well-known/security.txt" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">security.txt</a>
           </div>
         </div>
 

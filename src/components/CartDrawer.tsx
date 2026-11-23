@@ -1,6 +1,18 @@
-import React, { useState } from 'react';
-import { X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag, CheckCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  X, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag,
+  CheckCircle, AlertTriangle, MessageCircle
+} from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { SafetySensitivityProfile } from '../types';
+import { analyzeCartCompatibility } from '../utils/pharmacySafety';
+
+const PROFILE_LABELS: { id: SafetySensitivityProfile; label: string }[] = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'pregnancy', label: 'Grossesse' },
+  { id: 'sensitive', label: 'Peau sensible' },
+  { id: 'child', label: 'Enfant' }
+];
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -10,6 +22,7 @@ export const CartDrawer: React.FC = () => {
     updateCartQuantity,
     removeFromCart,
     setIsCheckoutOpen,
+    setIsChatOpen,
     appliedPromo,
     setAppliedPromo,
     validatePromoCode
@@ -18,6 +31,12 @@ export const CartDrawer: React.FC = () => {
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [promoError, setPromoError] = useState('');
   const [isValidating, setIsValidating] = useState(false);
+  const [safetyProfile, setSafetyProfile] = useState<SafetySensitivityProfile>('standard');
+
+  const safetyReport = useMemo(
+    () => analyzeCartCompatibility(cart, safetyProfile),
+    [cart, safetyProfile]
+  );
 
   if (!isCartOpen) return null;
 
@@ -138,6 +157,83 @@ export const CartDrawer: React.FC = () => {
                 </div>
               </div>
             ))
+          )}
+
+          {/* Pharmacist Compatibility & Safety Checker */}
+          {cart.length > 0 && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0" />
+                  <span>Contrôle Compatibilité Officinale</span>
+                </div>
+                <span className="text-[11px] font-mono text-slate-500 tabular-nums">
+                  {safetyReport.checkedCount} unité(s)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-1 p-1 bg-white border border-slate-200 rounded-lg">
+                {PROFILE_LABELS.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSafetyProfile(p.id)}
+                    className={`py-1 px-1.5 rounded text-[11px] font-semibold transition-colors ${
+                      safetyProfile === p.id
+                        ? 'bg-blue-700 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {safetyReport.findings.length === 0 ? (
+                <div className="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <span>Aucun doublon d’actif ni contre-indication détectée pour ce profil.</span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {safetyReport.findings.map(f => (
+                    <div
+                      key={f.id}
+                      className={`p-3 rounded-xl border text-xs space-y-1 ${
+                        f.severity === 'warning'
+                          ? 'bg-amber-50 border-amber-200 text-amber-950'
+                          : 'bg-blue-50 border-blue-200 text-blue-950'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{f.title}</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed">{f.detail}</p>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCartOpen(false);
+                      setIsChatOpen(true);
+                    }}
+                    className="w-full py-2 px-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 text-[11px] font-semibold rounded-lg inline-flex items-center justify-center gap-1.5"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-blue-700" />
+                    <span>Vérifier avec un pharmacien en direct</span>
+                  </button>
+                </div>
+              )}
+
+              {safetyReport.timingTips.length > 0 && (
+                <div className="space-y-1 pt-1 border-t border-slate-200 text-[11px] text-slate-600 leading-relaxed">
+                  {safetyReport.timingTips.map((tip, idx) => (
+                    <p key={idx}>• {tip}</p>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Sparkles, ShieldCheck, Truck, RefreshCw, Award, ArrowRight } from 'lucide-react';
+import { Sparkles, ShieldCheck, Truck, RefreshCw, Award, ArrowRight, Calendar } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const HeroBanner: React.FC = () => {
-  const { setIsAiAdvisorOpen } = useShop();
+  const { navigate } = useShop();
 
   return (
     <div className="bg-gradient-to-br from-blue-900 via-sky-900 to-blue-950 text-white relative overflow-hidden rounded-2xl sm:rounded-3xl">
@@ -28,14 +28,22 @@ export const HeroBanner: React.FC = () => {
               Commandez vos produits de parapharmacie de grandes marques au meilleur prix. Stock en temps réel, conseils de pharmaciens diplômés et livraison express sécurisée.
             </p>
 
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-2">
               <button
-                onClick={() => setIsAiAdvisorOpen(true)}
+                onClick={() => navigate('/diagnostic')}
                 className="px-6 py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-blue-950 font-bold rounded-xl shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
               >
                 <Sparkles className="w-5 h-5" />
                 <span>Créer ma routine sur-mesure</span>
                 <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => navigate('/rendez-vous')}
+                className="px-5 py-3.5 bg-white/15 hover:bg-white/25 text-white font-semibold rounded-xl border border-white/25 backdrop-blur-sm transition-all flex items-center gap-2"
+              >
+                <Calendar className="w-4 h-4 text-amber-300" />
+                <span>Prendre RDV en officine</span>
               </button>
               
               <button
@@ -43,7 +51,7 @@ export const HeroBanner: React.FC = () => {
                   const catalogElem = document.getElementById('catalog-section');
                   catalogElem?.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="px-6 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl border border-white/20 backdrop-blur-sm transition-all"
+                className="px-5 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl border border-white/20 backdrop-blur-sm transition-all"
               >
                 Explorer le catalogue
               </button>
