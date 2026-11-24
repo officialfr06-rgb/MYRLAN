@@ -88,9 +88,14 @@ export const Footer: React.FC = () => {
         {/* Main Footer Links */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center text-white">
-                <Store className="w-5 h-5" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl overflow-hidden bg-blue-700 ring-1 ring-blue-500/40 shrink-0">
+                <img
+                  src="/src/assets/images/myrlan_parapharmacie_logo_1795507056746.jpg"
+                  alt="Logo Myrlan Parapharmacie"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <span className="text-xl font-black text-white tracking-tight">Myrlan</span>
             </div>

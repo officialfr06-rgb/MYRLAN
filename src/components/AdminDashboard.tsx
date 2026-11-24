@@ -365,8 +365,13 @@ export const AdminDashboard: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-8 text-center space-y-5 shadow-xs">
-          <div className="w-14 h-14 rounded-xl bg-slate-900 text-sky-400 flex items-center justify-center mx-auto">
-            <ShieldCheck className="w-7 h-7" />
+          <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-md shadow-blue-900/15 ring-1 ring-blue-700/20 mx-auto bg-blue-700">
+            <img
+              src="/src/assets/images/myrlan_parapharmacie_logo_1795507056746.jpg"
+              alt="Logo Myrlan"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div className="space-y-2">
             <span className="text-[11px] font-bold uppercase tracking-widest text-blue-700">Myrlan Officine Pro</span>
@@ -678,8 +683,13 @@ export const AdminDashboard: React.FC = () => {
       {/* Brand Header */}
       <div className="h-16 px-5 border-b border-slate-800 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm">
-            M
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-blue-700 ring-1 ring-blue-500/40 shrink-0">
+            <img
+              src="/src/assets/images/myrlan_parapharmacie_logo_1795507056746.jpg"
+              alt="Logo Myrlan"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <div className="text-sm font-bold text-white leading-tight">Myrlan Pro</div>

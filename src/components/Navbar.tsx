@@ -85,14 +85,19 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
             <button
               onClick={() => navigate('/')}
-              className="flex items-center gap-2 text-left group focus:outline-none min-w-0"
+              className="flex items-center gap-2.5 text-left group focus:outline-none min-w-0"
             >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
-                <Store className="w-4 h-4 sm:w-5 sm:h-5" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl overflow-hidden shadow-md shadow-blue-500/20 ring-1 ring-blue-700/15 group-hover:scale-105 transition-transform shrink-0 bg-blue-700">
+                <img
+                  src="/src/assets/images/myrlan_parapharmacie_logo_1795507056746.jpg"
+                  alt="Logo Myrlan Parapharmacie"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div className="min-w-0">
-                <span className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-blue-700 to-sky-700 bg-clip-text text-transparent block truncate">
-                  Myr<span className="text-blue-500">lane</span>
+                <span className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-blue-800 to-sky-700 bg-clip-text text-transparent block truncate">
+                  Myr<span className="text-blue-600">lan</span>
                 </span>
                 <span className="hidden sm:block text-[10px] uppercase tracking-widest text-blue-800 font-semibold truncate">
                   Santé &amp; Beauté Expert
