@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -799,6 +800,9 @@ const DEFAULT_RESTOCK_CONFIG = {
   updatedAt: TODAY_ISO
 };
 
+let cachedDb: any = null;
+let cachedDbMtimeMs = -1;
+
 function getDatabase() {
   if (!fs.existsSync(dbFilePath)) {
     const initialDb = {
@@ -832,10 +836,14 @@ function getDatabase() {
       restockNotifications: [],
       restockEmails: []
     };
-    fs.writeFileSync(dbFilePath, JSON.stringify(initialDb, null, 2));
+    saveDatabase(initialDb);
     return initialDb;
   }
   try {
+    const stat = fs.statSync(dbFilePath);
+    if (cachedDb && stat.mtimeMs === cachedDbMtimeMs) {
+      return cachedDb;
+    }
     const data = fs.readFileSync(dbFilePath, 'utf-8');
     const parsed = JSON.parse(data);
     let dirty = false;
@@ -918,7 +926,12 @@ function getDatabase() {
         dirty = true;
       }
     }
-    if (dirty) saveDatabase(parsed);
+    if (dirty) {
+      saveDatabase(parsed);
+    } else {
+      cachedDb = parsed;
+      cachedDbMtimeMs = stat.mtimeMs;
+    }
     return parsed;
   } catch {
     return {
@@ -957,6 +970,13 @@ function getDatabase() {
 
 function saveDatabase(db: any) {
   fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
+  try {
+    cachedDb = db;
+    cachedDbMtimeMs = fs.statSync(dbFilePath).mtimeMs;
+  } catch {
+    cachedDb = db;
+    cachedDbMtimeMs = -1;
+  }
 }
 
 // ------------------------------------------------------------------
@@ -1117,6 +1137,7 @@ async function startServer() {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+  app.use(compression({ threshold: 1024 }));
 
   // Security Response Headers
   app.use((_req, res, next) => {
@@ -1164,7 +1185,7 @@ async function startServer() {
       return res.status(403).json({ success: false, error: 'Accès authentifié requis pour consulter une ordonnance.' });
     }
     next();
-  }, express.static(uploadsDir, { dotfiles: 'deny' }));
+  }, express.static(uploadsDir, { dotfiles: 'deny', maxAge: '7d' }));
 
   const PORT = process.env.PORT || 3000;
   const hasAuth = process.env.SMTP_USER && process.env.SMTP_PASS;
@@ -4041,8 +4062,14 @@ Policy: ${baseUrl}/confidentialite
     next();
   });
 
-  // Vite middleware setup
-  if (process.env.NODE_ENV !== 'production') {
+  // Production static serving vs Vite dev middleware
+  const distPath = path.resolve(process.cwd(), 'dist');
+  const distIndexPath = path.resolve(distPath, 'index.html');
+  const isCompiledServer = path.basename(process.argv[1] || '') === 'server.js';
+  const useProductionStatic =
+    process.env.NODE_ENV === 'production' || (isCompiledServer && fs.existsSync(distIndexPath));
+
+  if (!useProductionStatic) {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -4057,10 +4084,26 @@ Policy: ${baseUrl}/confidentialite
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(
+      '/assets',
+      express.static(path.resolve(distPath, 'assets'), {
+        maxAge: '1y',
+        immutable: true
+      })
+    );
+    app.use(
+      express.static(distPath, {
+        maxAge: '1h',
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('index.html')) {
+            res.setHeader('Cache-Control', 'no-cache');
+          }
+        }
+      })
+    );
     app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(distIndexPath);
     });
   }
 

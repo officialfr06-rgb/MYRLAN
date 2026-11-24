@@ -1,38 +1,94 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { ShopProvider, useShop } from './context/ShopContext';
 import { Navbar } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { ProductCatalog } from './components/ProductCatalog';
-import { ProductPage } from './components/ProductPage';
 import { CartDrawer } from './components/CartDrawer';
-import { CheckoutModal } from './components/CheckoutModal';
-import { AiAdvisorModal } from './components/AiAdvisorModal';
-import { LoyaltyModal } from './components/LoyaltyModal';
 import { CustomerSupportChat } from './components/CustomerSupportChat';
-import { OrderTrackingModal } from './components/OrderTrackingModal';
-import { WishlistModal } from './components/WishlistModal';
-import { FaqAdviceModal } from './components/FaqAdviceModal';
-import { LegalModal } from './components/LegalModal';
 import { AccountModal } from './components/AccountModal';
-import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
 import { SeoHeadManager } from './components/SeoHeadManager';
 import { CompareBar } from './components/CompareBar';
-import { CompareModal } from './components/CompareModal';
 import { useBodyScrollLock } from './utils/scrollLock';
 
-import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { PrescriptionPage } from './pages/PrescriptionPage';
-import { ContactPage } from './pages/ContactPage';
-import { LegalPages } from './pages/LegalPages';
-import { AboutPage } from './pages/AboutPage';
-import { AdviceBlogPage } from './pages/AdviceBlogPage';
-import { BrandsPage, PromotionsPage } from './pages/BrandsPromosPages';
-import { AccountPage, OrdersPage } from './pages/AccountOrdersPage';
-import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
-import { DiagnosticPage } from './pages/DiagnosticPage';
-import { AppointmentsPage } from './pages/AppointmentsPage';
+// Lazy-loaded heavy modules (kept out of initial storefront bundle)
+const AdminDashboard = lazy(() =>
+  import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard }))
+);
+const ProductPage = lazy(() =>
+  import('./components/ProductPage').then(m => ({ default: m.ProductPage }))
+);
+const CheckoutModal = lazy(() =>
+  import('./components/CheckoutModal').then(m => ({ default: m.CheckoutModal }))
+);
+const AiAdvisorModal = lazy(() =>
+  import('./components/AiAdvisorModal').then(m => ({ default: m.AiAdvisorModal }))
+);
+const LoyaltyModal = lazy(() =>
+  import('./components/LoyaltyModal').then(m => ({ default: m.LoyaltyModal }))
+);
+const OrderTrackingModal = lazy(() =>
+  import('./components/OrderTrackingModal').then(m => ({ default: m.OrderTrackingModal }))
+);
+const WishlistModal = lazy(() =>
+  import('./components/WishlistModal').then(m => ({ default: m.WishlistModal }))
+);
+const FaqAdviceModal = lazy(() =>
+  import('./components/FaqAdviceModal').then(m => ({ default: m.FaqAdviceModal }))
+);
+const LegalModal = lazy(() =>
+  import('./components/LegalModal').then(m => ({ default: m.LegalModal }))
+);
+const CompareModal = lazy(() =>
+  import('./components/CompareModal').then(m => ({ default: m.CompareModal }))
+);
+
+const ResetPasswordPage = lazy(() =>
+  import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage }))
+);
+const PrescriptionPage = lazy(() =>
+  import('./pages/PrescriptionPage').then(m => ({ default: m.PrescriptionPage }))
+);
+const ContactPage = lazy(() =>
+  import('./pages/ContactPage').then(m => ({ default: m.ContactPage }))
+);
+const LegalPages = lazy(() =>
+  import('./pages/LegalPages').then(m => ({ default: m.LegalPages }))
+);
+const AboutPage = lazy(() =>
+  import('./pages/AboutPage').then(m => ({ default: m.AboutPage }))
+);
+const AdviceBlogPage = lazy(() =>
+  import('./pages/AdviceBlogPage').then(m => ({ default: m.AdviceBlogPage }))
+);
+const BrandsPage = lazy(() =>
+  import('./pages/BrandsPromosPages').then(m => ({ default: m.BrandsPage }))
+);
+const PromotionsPage = lazy(() =>
+  import('./pages/BrandsPromosPages').then(m => ({ default: m.PromotionsPage }))
+);
+const AccountPage = lazy(() =>
+  import('./pages/AccountOrdersPage').then(m => ({ default: m.AccountPage }))
+);
+const OrdersPage = lazy(() =>
+  import('./pages/AccountOrdersPage').then(m => ({ default: m.OrdersPage }))
+);
+const OrderConfirmationPage = lazy(() =>
+  import('./pages/OrderConfirmationPage').then(m => ({ default: m.OrderConfirmationPage }))
+);
+const DiagnosticPage = lazy(() =>
+  import('./pages/DiagnosticPage').then(m => ({ default: m.DiagnosticPage }))
+);
+const AppointmentsPage = lazy(() =>
+  import('./pages/AppointmentsPage').then(m => ({ default: m.AppointmentsPage }))
+);
+
+const PageLoader: React.FC = () => (
+  <div className="min-h-[45vh] flex items-center justify-center">
+    <div className="w-7 h-7 rounded-full border-2 border-blue-200 border-t-blue-700 animate-spin" />
+  </div>
+);
 
 const StoreContent: React.FC = () => {
   const {
@@ -70,7 +126,9 @@ const StoreContent: React.FC = () => {
   if (currentPath === '/admin') {
     return (
       <div className="min-h-screen w-full overflow-x-clip bg-slate-50 text-slate-900 font-sans antialiased">
-        <AdminDashboard />
+        <Suspense fallback={<PageLoader />}>
+          <AdminDashboard />
+        </Suspense>
         <AccountModal />
         <Toast />
       </div>
@@ -145,24 +203,28 @@ const StoreContent: React.FC = () => {
       <Navbar />
 
       <main className="flex-1 min-w-0 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 w-full">
-        {renderPage()}
+        <Suspense fallback={<PageLoader />}>
+          {renderPage()}
+        </Suspense>
       </main>
 
       <Footer />
 
       {/* Overlays & Modals */}
       <CartDrawer />
-      <CheckoutModal />
-      <AiAdvisorModal />
-      <LoyaltyModal />
       <CustomerSupportChat />
-      <OrderTrackingModal />
-      <WishlistModal />
-      <FaqAdviceModal />
-      <LegalModal />
       <AccountModal />
       <CompareBar />
-      <CompareModal />
+      <Suspense fallback={null}>
+        {isCheckoutOpen && <CheckoutModal />}
+        {isAiAdvisorOpen && <AiAdvisorModal />}
+        {isLoyaltyOpen && <LoyaltyModal />}
+        {isOrderTrackingOpen && <OrderTrackingModal />}
+        {isWishlistOpen && <WishlistModal />}
+        {isFaqOpen && <FaqAdviceModal />}
+        {isLegalOpen && <LegalModal />}
+        {isCompareOpen && <CompareModal />}
+      </Suspense>
       <Toast />
     </div>
   );
