@@ -163,7 +163,11 @@ export const AdminEmailTemplatesDashboard: React.FC<AdminEmailTemplatesDashboard
         return;
       }
       if (Array.isArray(data.logs)) setLogs(data.logs);
-      showToast(`Email de test préparé pour ${recipient} (${data.logEntry?.status || 'OK'}).`);
+      if (data.smtpError) {
+        showToast(`Échec SMTP : ${data.smtpError}`);
+      } else {
+        showToast(`Email de test traité pour ${recipient} (${data.logEntry?.status || 'OK'}).`);
+      }
     } catch {
       showToast('Erreur serveur pendant l’envoi de test.');
     } finally {
@@ -230,7 +234,7 @@ export const AdminEmailTemplatesDashboard: React.FC<AdminEmailTemplatesDashboard
         <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="p-3 border-b border-slate-200 bg-slate-50/70">
             <div className="flex flex-wrap gap-1">
-              {(['Tous', 'Commandes', 'Rendez-vous', 'Ordonnances', 'Catalogue & CRM'] as CategoryFilter[]).map(cat => (
+              {(['Tous', 'Alertes Admin', 'Commandes', 'Rendez-vous', 'Ordonnances', 'Catalogue & CRM'] as CategoryFilter[]).map(cat => (
                 <button
                   key={cat}
                   type="button"
@@ -389,6 +393,26 @@ export const AdminEmailTemplatesDashboard: React.FC<AdminEmailTemplatesDashboard
 
                   {/* Subject & Heading */}
                   <div className="grid grid-cols-1 gap-4">
+                    {(draft.category === 'Alertes Admin' || draft.recipientEmail !== undefined) && (
+                      <label className="space-y-1.5 block">
+                        <span className="font-semibold text-slate-700 block">
+                          Destinataire de l’alerte administrateur
+                        </span>
+                        <input
+                          type="email"
+                          required
+                          maxLength={160}
+                          placeholder="myrlan@myrlan.com"
+                          value={draft.recipientEmail || ''}
+                          onChange={(e) => setDraft(prev => prev ? { ...prev, recipientEmail: e.target.value } : prev)}
+                          className="w-full px-3 py-2 border border-blue-200 bg-blue-50/40 rounded-lg text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        />
+                        <span className="text-[11px] text-slate-500 block">
+                          Cette adresse reçoit automatiquement une alerte à chaque nouvelle inscription client sur le site.
+                        </span>
+                      </label>
+                    )}
+
                     <label className="space-y-1.5 block">
                       <span className="font-semibold text-slate-700 block">Objet de l’email</span>
                       <input

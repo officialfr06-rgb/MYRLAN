@@ -363,9 +363,15 @@ export type EmailTemplateId =
   | 'appointment_cancelled'
   | 'prescription_ready'
   | 'prescription_refused'
-  | 'back_in_stock';
+  | 'back_in_stock'
+  | 'admin_new_customer';
 
-export type EmailTemplateCategory = 'Commandes' | 'Rendez-vous' | 'Ordonnances' | 'Catalogue & CRM';
+export type EmailTemplateCategory =
+  | 'Commandes'
+  | 'Rendez-vous'
+  | 'Ordonnances'
+  | 'Catalogue & CRM'
+  | 'Alertes Admin';
 
 export interface EmailTemplate {
   id: EmailTemplateId;
@@ -374,6 +380,7 @@ export interface EmailTemplate {
   statusLabel: string;
   triggerEvent: string;
   enabled: boolean;
+  recipientEmail?: string;
   subject: string;
   heading: string;
   body: string;

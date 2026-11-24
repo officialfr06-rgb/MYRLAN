@@ -10,7 +10,7 @@ import multer from 'multer';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
 
 // Session signing secret (uses env var in production, ephemeral random secret in dev if omitted)
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
@@ -588,6 +588,24 @@ const DEFAULT_EMAIL_TEMPLATES = [
     footerNote: 'Vous recevez cet e-mail car vous avez activé une alerte retour en stock sur Myrlan.',
     availableVariables: ['productName', 'productBrand', 'productPrice', 'stockCount', 'productPath'],
     updatedAt: TODAY_ISO
+  },
+  {
+    id: 'admin_new_customer',
+    name: 'Nouveau Client Inscrit (Admin)',
+    category: 'Alertes Admin',
+    statusLabel: 'Nouvelle inscription',
+    triggerEvent: 'Envoyé automatiquement à l’administrateur dès qu’un nouveau client crée un compte sur le site.',
+    enabled: true,
+    recipientEmail: 'myrlan@myrlan.com',
+    subject: '[Nouveau client] {{customerName}} vient de s’inscrire — Myrlan Officine',
+    heading: 'Nouvelle inscription client sur la boutique',
+    body: 'Bonjour,\n\nUn nouveau client vient de créer un compte sur Myrlan Parapharmacie :\n\n• Nom complet : {{customerName}}\n• Adresse e-mail : {{customerEmail}}\n• Profil de peau : {{skinType}}\n• Date d’inscription : {{registrationDate}}\n• Identifiant client : {{customerId}}\n\nTotal actuel de clients inscrits : {{totalCustomers}}.\n\nVous pouvez consulter son profil et son historique depuis le tableau de bord administrateur.',
+    ctaLabel: 'Ouvrir le tableau de bord Admin',
+    ctaPath: '/admin',
+    accentColor: '#1d4ed8',
+    footerNote: 'Notification interne automatique Myrlan Officine — destinée à l’équipe administrateur.',
+    availableVariables: ['customerName', 'customerEmail', 'skinType', 'registrationDate', 'customerId', 'totalCustomers'],
+    updatedAt: TODAY_ISO
   }
 ];
 
@@ -612,7 +630,13 @@ const SAMPLE_EMAIL_VARIABLES: Record<string, string> = {
   productBrand: 'La Roche-Glow',
   productPrice: '29.90 €',
   stockCount: '18',
-  productPath: '/produit/p-1'
+  productPath: '/produit/p-1',
+  customerName: 'Sophie Mercier',
+  customerEmail: 'sophie.mercier@exemple.fr',
+  skinType: 'Mixte à sensible',
+  registrationDate: new Date().toISOString().split('T')[0],
+  customerId: 'usr-17482091',
+  totalCustomers: '128'
 };
 
 function escapeHtmlForEmail(raw: string): string {
@@ -1202,6 +1226,9 @@ async function startServer() {
     host: process.env.SMTP_HOST || 'smtp.ethereal.email',
     port: smtpPort,
     secure: smtpSecure,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
@@ -1209,6 +1236,12 @@ async function startServer() {
   }) : nodemailer.createTransport({
     jsonTransport: true
   });
+
+  if (hasAuth) {
+    console.log(`[SMTP] Configuré : ${process.env.SMTP_HOST}:${smtpPort} (${smtpSecure ? 'SSL/TLS' : 'STARTTLS'}) — expéditeur : ${SMTP_FROM_EMAIL}`);
+  } else {
+    console.log('[SMTP] Non configuré (SMTP_USER / SMTP_PASS manquants) — Mode Aperçu actif');
+  }
 
   async function sendTemplatedEmail(
     db: any,
@@ -1244,6 +1277,7 @@ async function startServer() {
     }
 
     let dispatchStatus: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur' = hasAuth ? 'Envoyé (SMTP)' : 'Mode Aperçu';
+    let smtpError = '';
     try {
       await smtpTransporter.sendMail({
         from: smtpFromHeader,
@@ -1253,7 +1287,8 @@ async function startServer() {
         html: rendered.html
       });
     } catch (err: any) {
-      console.error('[SMTP] Erreur envoi template:', err?.message || err);
+      smtpError = String(err?.message || err || 'Erreur SMTP inconnue');
+      console.error('[SMTP] Erreur envoi template:', smtpError);
       dispatchStatus = hasAuth ? 'Erreur' : 'Mode Aperçu';
     }
 
@@ -1267,7 +1302,7 @@ async function startServer() {
       sentAt: nowStr
     };
     db.emailLogs = [logEntry, ...(Array.isArray(db.emailLogs) ? db.emailLogs : [])].slice(0, 80);
-    return { logEntry, rendered };
+    return { logEntry, rendered, smtpError };
   }
 
   async function notifyBackInStock(db: any, product: any, req?: Request): Promise<number> {
@@ -2453,7 +2488,7 @@ async function startServer() {
     res.json({ success: true, token, user: sanitizeUser(user) });
   });
 
-  app.post('/api/auth/register', (req, res) => {
+  app.post('/api/auth/register', async (req, res) => {
     const ip = getClientIp(req);
     const rl = checkRateLimit(`register:${ip}`, 'auth_register', ip, 5, 30 * 60 * 1000, 30 * 60 * 1000);
     if (!rl.allowed) {
@@ -2473,19 +2508,51 @@ async function startServer() {
     if (existing) {
       return res.status(400).json({ success: false, error: 'Cet email est déjà enregistré.' });
     }
-    const newUser = {
+    const registrationDate = new Date().toISOString().split('T')[0];
+    const newUser: any = {
       id: `usr-${Date.now()}`,
       name: String(name).trim().slice(0, 100),
       email: cleanEmail,
       password: hashPassword(String(password)),
       role: 'customer',
-      skinType,
+      skinType: String(skinType || 'Mixte à sensible').trim().slice(0, 80),
       concerns: [],
       savedAddresses: [],
-      createdAt: new Date().toISOString().split('T')[0]
+      createdAt: registrationDate
     };
+    ensureUserReferralCode(newUser);
     db.users.push(newUser);
     saveDatabase(db);
+
+    // Send automatic admin notification email for new customer registration
+    try {
+      const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES;
+      const adminTpl = templates.find((t: any) => t.id === 'admin_new_customer');
+      const customRecipient = String(adminTpl?.recipientEmail || '').trim();
+      const adminRecipient =
+        customRecipient && customRecipient.includes('@')
+          ? customRecipient
+          : (process.env.SMTP_CONTACT_TO || SMTP_FROM_EMAIL);
+      const totalCustomers = db.users.filter((u: any) => u.role !== 'admin').length;
+
+      await sendTemplatedEmail(
+        db,
+        'admin_new_customer',
+        adminRecipient,
+        {
+          customerName: newUser.name,
+          customerEmail: newUser.email,
+          skinType: newUser.skinType,
+          registrationDate,
+          customerId: newUser.id,
+          totalCustomers: String(totalCustomers)
+        },
+        req
+      );
+      saveDatabase(db);
+    } catch (err: any) {
+      console.error('[SMTP] Erreur notification nouvel inscrit:', err?.message || err);
+    }
 
     const epoch = Number(db.securityConfig?.tokenEpoch || 1);
     const token = signSessionToken({ id: newUser.id, email: newUser.email, role: 'customer' }, epoch);
@@ -2806,9 +2873,18 @@ async function startServer() {
     const safePath = String(body.ctaPath ?? current.ctaPath ?? '/').trim();
     const normalizedPath = safePath.startsWith('/') ? safePath.slice(0, 120) : current.ctaPath;
 
+    const rawRecipient = body.recipientEmail !== undefined
+      ? String(body.recipientEmail || '').trim().slice(0, 160)
+      : current.recipientEmail;
+    const validRecipient =
+      rawRecipient && rawRecipient.includes('@')
+        ? rawRecipient
+        : current.recipientEmail;
+
     const updated = {
       ...current,
       enabled: body.enabled !== undefined ? Boolean(body.enabled) : current.enabled,
+      ...(validRecipient !== undefined ? { recipientEmail: validRecipient } : {}),
       subject: String(body.subject ?? current.subject).trim().slice(0, 160) || current.subject,
       heading: String(body.heading ?? current.heading).trim().slice(0, 180) || current.heading,
       body: String(body.body ?? current.body).trim().slice(0, 3000) || current.body,
@@ -2882,6 +2958,7 @@ async function startServer() {
     res.json({
       success: true,
       logEntry: result?.logEntry,
+      smtpError: result?.smtpError || undefined,
       logs: (db.emailLogs || []).slice(0, 50)
     });
   });
