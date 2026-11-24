@@ -97,6 +97,7 @@ export interface Review {
   rating: number;
   comment: string;
   date: string;
+  verifiedPurchase?: boolean;
 }
 
 export interface LoyaltyAccount {
@@ -148,6 +149,9 @@ export interface User {
   skinType?: string;
   concerns?: string[];
   savedAddresses?: SavedAddress[];
+  referralCode?: string;
+  loyaltyPoints?: number;
+  referralsCount?: number;
 }
 
 export interface AdminUserSummary {
@@ -333,5 +337,158 @@ export interface AdminSecurityOverview {
   securityTxtPreview: string;
   headersEnabled: { name: string; value: string }[];
 }
+
+export type HeroPresetId =
+  | 'officine_navy'
+  | 'botanique_sauge'
+  | 'clinique_ivoire'
+  | 'solaire_dore';
+
+export interface DesignConfig {
+  activeHeroId: HeroPresetId;
+  customBadge?: string;
+  customTitle?: string;
+  customSubtitle?: string;
+  customPrimaryCtaLabel?: string;
+  showTrustBar: boolean;
+  updatedAt?: string;
+}
+
+export type EmailTemplateId =
+  | 'order_confirmed'
+  | 'order_shipped'
+  | 'order_delivered'
+  | 'appointment_confirmed'
+  | 'appointment_completed'
+  | 'appointment_cancelled'
+  | 'prescription_ready'
+  | 'prescription_refused'
+  | 'back_in_stock';
+
+export type EmailTemplateCategory = 'Commandes' | 'Rendez-vous' | 'Ordonnances' | 'Catalogue & CRM';
+
+export interface EmailTemplate {
+  id: EmailTemplateId;
+  name: string;
+  category: EmailTemplateCategory;
+  statusLabel: string;
+  triggerEvent: string;
+  enabled: boolean;
+  subject: string;
+  heading: string;
+  body: string;
+  ctaLabel: string;
+  ctaPath: string;
+  accentColor: string;
+  footerNote: string;
+  availableVariables: string[];
+  updatedAt: string;
+}
+
+export interface EmailLogEntry {
+  id: string;
+  templateId: string;
+  templateName: string;
+  to: string;
+  subject: string;
+  status: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Désactivé' | 'Erreur';
+  sentAt: string;
+}
+
+export interface StockAlert {
+  id: string;
+  productId: string;
+  productName: string;
+  email: string;
+  status: 'En attente' | 'Notifié';
+  createdAt: string;
+  notifiedAt?: string;
+}
+
+export interface NewsletterSubscriber {
+  id: string;
+  email: string;
+  name?: string;
+  status: 'Actif' | 'Désabonné' | 'Désinscrit';
+  source: string;
+  subscribedAt: string;
+}
+
+export interface EmailCampaign {
+  id: string;
+  subject: string;
+  heading: string;
+  recipientCount: number;
+  sentAt: string;
+  status: 'Envoyée (SMTP)' | 'Mode Aperçu';
+}
+
+export interface ReferralRecord {
+  id: string;
+  referrerUserId: string;
+  referrerCode: string;
+  referredEmail: string;
+  orderId: string;
+  rewardPoints: number;
+  discountGranted: number;
+  createdAt: string;
+}
+
+export interface ReferralSummary {
+  referralCode: string;
+  loyaltyPoints: number;
+  referralsCount: number;
+  rewardPerReferral: number;
+  friendDiscountPercent: number;
+  referrals: ReferralRecord[];
+}
+
+export interface RestockConfig {
+  criticalThreshold: number;
+  targetStock: number;
+  supplierEmail: string;
+  supplierName: string;
+  autoNotifyOnOrder: boolean;
+  updatedAt?: string;
+}
+
+export interface RestockNotification {
+  id: string;
+  productId: string;
+  productName: string;
+  brand: string;
+  ean: string;
+  currentStock: number;
+  threshold: number;
+  severity: 'out' | 'critical';
+  acknowledged: boolean;
+  triggeredAt: string;
+}
+
+export interface RestockOrderLine {
+  productId: string;
+  name: string;
+  brand: string;
+  ean: string;
+  currentStock: number;
+  orderQty: number;
+  unitPrice: number;
+}
+
+export interface RestockEmailRecord {
+  id: string;
+  to: string;
+  supplierName: string;
+  subject: string;
+  itemsCount: number;
+  totalUnits: number;
+  items: RestockOrderLine[];
+  status: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur';
+  sentAt: string;
+  actor: string;
+}
+
+
+
 
 

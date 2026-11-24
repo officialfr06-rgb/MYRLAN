@@ -1,33 +1,64 @@
 import React, { useState } from 'react';
-import { X, Star, MessageSquare } from 'lucide-react';
+import { X, MessageSquare, ShieldCheck } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { Product } from '../types';
+import { Product, Review } from '../types';
+import { authFetch } from '../utils/authToken';
 
 interface AddReviewModalProps {
   product: Product;
   onClose: () => void;
+  onReviewAdded?: (review: Review, updatedProduct?: Product) => void;
 }
 
-export const AddReviewModal: React.FC<AddReviewModalProps> = ({ product, onClose }) => {
-  const { showToast } = useShop();
+export const AddReviewModal: React.FC<AddReviewModalProps> = ({ product, onClose, onReviewAdded }) => {
+  const { showToast, currentUser } = useShop();
   const [rating, setRating] = useState(5);
-  const [author, setAuthor] = useState('');
+  const [author, setAuthor] = useState(currentUser?.name || '');
+  const [email, setEmail] = useState(currentUser?.email || '');
   const [comment, setComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!author || !comment) {
-      showToast('Veuillez remplir tous les champs.');
+    if (!author.trim() || !comment.trim()) {
+      showToast('Veuillez remplir tous les champs obligatoires.');
       return;
     }
-    showToast('Merci ! Votre avis a été publié avec succès.');
-    onClose();
+    setIsSubmitting(true);
+    try {
+      const res = await authFetch(`/api/reviews/${encodeURIComponent(product.id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          author: author.trim(),
+          email: email.trim(),
+          comment: comment.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.review) {
+        if (onReviewAdded) onReviewAdded(data.review, data.product);
+        showToast(
+          data.review.verifiedPurchase
+            ? 'Merci ! Votre avis « Achat vérifié » a été publié.'
+            : 'Merci ! Votre avis a été publié avec succès.'
+        );
+        onClose();
+      } else {
+        showToast(data.error || 'Impossible de publier votre avis.');
+      }
+    } catch {
+      showToast('Erreur réseau lors de la publication.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-900 to-sky-900 text-white">
           <div className="flex items-center gap-2">
@@ -72,8 +103,25 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ product, onClose
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
               placeholder="ex: Julie Durand"
-              className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Email de commande <span className="font-normal text-gray-400">(optionnel — active le badge Achat vérifié)</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client@exemple.fr"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700">
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span>Contrôle automatique avec l’historique de commandes officinal</span>
+            </div>
           </div>
 
           <div>
@@ -84,7 +132,7 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ product, onClose
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Qu'avez-vous pensé de ce produit ?"
-              className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -92,8 +140,12 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ product, onClose
             <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 text-xs font-bold hover:bg-gray-100 rounded-xl">
               Annuler
             </button>
-            <button type="submit" className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md">
-              Publier mon avis
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-md"
+            >
+              {isSubmitting ? 'Publication...' : 'Publier mon avis'}
             </button>
           </div>
         </form>

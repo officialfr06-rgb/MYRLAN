@@ -13,7 +13,8 @@ import {
   User,
   PromoCode,
   SavedAddress,
-  ChatSession
+  ChatSession,
+  DesignConfig
 } from '../types';
 import { MOCK_PRODUCTS } from '../data/mockProducts';
 import { authFetch, clearAuthToken } from '../utils/authToken';
@@ -46,8 +47,11 @@ interface ShopContextType {
   isFaqOpen: boolean;
   isLegalOpen: boolean;
   isAccountOpen: boolean;
+  isCompareOpen: boolean;
+  compareList: string[];
   selectedProductForDetail: Product | null;
   toastMessage: string | null;
+  designConfig: DesignConfig;
 
   navigate: (path: string) => void;
   setSearchQuery: (q: string) => void;
@@ -65,6 +69,7 @@ interface ShopContextType {
   setIsFaqOpen: (open: boolean) => void;
   setIsLegalOpen: (open: boolean) => void;
   setIsAccountOpen: (open: boolean) => void;
+  setIsCompareOpen: (open: boolean) => void;
   setSelectedProductForDetail: (p: Product | null) => void;
   setIsAdminMode: (admin: boolean) => void;
 
@@ -73,6 +78,9 @@ interface ShopContextType {
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
   toggleWishlist: (productId: string) => void;
+  toggleCompare: (productId: string) => void;
+  removeFromCompare: (productId: string) => void;
+  clearCompare: () => void;
   validatePromoCode: (code: string, subtotal: number) => Promise<{ success: boolean; promo?: PromoCode; error?: string }>;
   createOrder: (
     address: ShippingAddress,
@@ -94,6 +102,7 @@ interface ShopContextType {
   currentUser: User | null;
   logoutUser: () => Promise<void>;
   setCurrentUser: (user: User | null) => void;
+  setDesignConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
@@ -107,13 +116,35 @@ function normalizePathname(raw: string): string {
   return pathname || '/';
 }
 
+function normalizeProduct(p: Product): Product {
+  const fallback = MOCK_PRODUCTS.find(m => m.id === p.id);
+  return {
+    ...fallback,
+    ...p,
+    price: Number(p.price ?? fallback?.price ?? 0),
+    stock: Number(p.stock ?? fallback?.stock ?? 0),
+    rating: typeof p.rating === 'number' && !Number.isNaN(p.rating) ? p.rating : (fallback?.rating ?? 4.8),
+    reviewsCount: typeof p.reviewsCount === 'number' && !Number.isNaN(p.reviewsCount) ? p.reviewsCount : (fallback?.reviewsCount ?? 0),
+    ingredients: Array.isArray(p.ingredients) ? p.ingredients : (fallback?.ingredients ?? []),
+    tags: Array.isArray(p.tags) ? p.tags : (fallback?.tags ?? [])
+  };
+}
+
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentPath, setCurrentPath] = useState<string>(() => normalizePathname(window.location.pathname));
   const [currentSearch, setCurrentSearch] = useState<string>(() => window.location.search || '');
 
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('myrlan_products');
-    return saved ? JSON.parse(saved) : MOCK_PRODUCTS;
+    try {
+      const saved = localStorage.getItem('myrlan_products');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed.map(normalizeProduct);
+      }
+    } catch {
+      // fallback
+    }
+    return MOCK_PRODUCTS;
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -124,6 +155,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [wishlist, setWishlist] = useState<string[]>(() => {
     const saved = localStorage.getItem('myrlan_wishlist');
     return saved ? JSON.parse(saved) : [];
+  });
+
+  const [compareList, setCompareList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('myrlan_compare');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -206,7 +246,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isFaqOpen, setIsFaqOpen] = useState<boolean>(false);
   const [isLegalOpen, setIsLegalOpen] = useState<boolean>(false);
   const [isAccountOpen, setIsAccountOpen] = useState<boolean>(false);
+  const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [designConfig, setDesignConfig] = useState<DesignConfig>({
+    activeHeroId: 'officine_navy',
+    customBadge: '',
+    customTitle: '',
+    customSubtitle: '',
+    customPrimaryCtaLabel: '',
+    showTrustBar: true
+  });
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -306,7 +355,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetch('/api/products')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) setProducts(data);
+        if (Array.isArray(data) && data.length > 0) setProducts(data.map(normalizeProduct));
       })
       .catch(() => {});
 
@@ -314,6 +363,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setPromoCodes(data);
+      })
+      .catch(() => {});
+
+    fetch('/api/design/public')
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data === 'object' && data.activeHeroId) {
+          setDesignConfig(data);
+        }
       })
       .catch(() => {});
 
@@ -370,7 +428,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const socket = io();
 
     socket.on('products-updated', (updatedProducts: Product[]) => {
-      setProducts(updatedProducts);
+      if (Array.isArray(updatedProducts)) {
+        setProducts(updatedProducts.map(normalizeProduct));
+      }
     });
 
     socket.on('promos-updated', (updatedPromos: PromoCode[]) => {
@@ -396,6 +456,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    socket.on('design-updated', (updatedDesign: DesignConfig) => {
+      if (updatedDesign && updatedDesign.activeHeroId) {
+        setDesignConfig(updatedDesign);
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -412,6 +478,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     localStorage.setItem('myrlan_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
+
+  useEffect(() => {
+    localStorage.setItem('myrlan_compare', JSON.stringify(compareList));
+  }, [compareList]);
 
   useEffect(() => {
     localStorage.setItem('myrlan_guest_orders', JSON.stringify(guestOrders));
@@ -496,9 +566,39 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const toggleCompare = (productId: string) => {
+    if (compareList.includes(productId)) {
+      setCompareList(prev => prev.filter(id => id !== productId));
+      showToast('Produit retiré du comparateur.');
+      return;
+    }
+    if (compareList.length >= 4) {
+      showToast('Maximum 4 produits dans le comparateur. Retirez-en un pour en ajouter un autre.');
+      return;
+    }
+    const target = products.find(p => p.id === productId);
+    const nextCount = compareList.length + 1;
+    setCompareList(prev => [...prev, productId]);
+    showToast(`${target ? target.name : 'Produit'} ajouté au comparateur (${nextCount}/4).`);
+  };
+
+  const removeFromCompare = (productId: string) => {
+    setCompareList(prev => {
+      const next = prev.filter(id => id !== productId);
+      if (next.length === 0) setIsCompareOpen(false);
+      return next;
+    });
+  };
+
+  const clearCompare = () => {
+    setCompareList([]);
+    setIsCompareOpen(false);
+    showToast('Comparateur vidé.');
+  };
+
   const validatePromoCode = async (code: string, subtotal: number) => {
     try {
-      const res = await fetch('/api/promos/validate', {
+      const res = await authFetch('/api/promos/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, subtotal })
@@ -687,17 +787,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     clearCart();
 
-    fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: address.email,
-        subject: `Confirmation de commande ${finalOrder.id} - Myrlan`,
-        message: `Bonjour ${address.fullName},\n\nVotre commande ${finalOrder.id} d'un montant de ${finalOrder.totalAmount.toFixed(2)} € a bien été validée.\nMode : ${carrier}.\nNuméro de suivi : ${finalOrder.trackingNumber}.\n\nMerci de votre confiance !\nL'équipe Myrlan`,
-        orderId: finalOrder.id
-      })
-    }).catch(() => {});
-
     showToast(`Commande ${finalOrder.id} validée avec succès ! +${finalOrder.loyaltyPointsEarned} points fidélité.`);
     return finalOrder;
   };
@@ -816,8 +905,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isFaqOpen,
         isLegalOpen,
         isAccountOpen,
+        isCompareOpen,
+        compareList,
         selectedProductForDetail,
         toastMessage,
+        designConfig,
         navigate,
         setSearchQuery,
         setSelectedCategory,
@@ -834,6 +926,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsFaqOpen,
         setIsLegalOpen,
         setIsAccountOpen,
+        setIsCompareOpen,
         setSelectedProductForDetail,
         setIsAdminMode,
         addToCart,
@@ -841,6 +934,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateCartQuantity,
         clearCart,
         toggleWishlist,
+        toggleCompare,
+        removeFromCompare,
+        clearCompare,
         validatePromoCode,
         createOrder,
         updateOrderStatus,
@@ -855,7 +951,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         showToast,
         currentUser,
         logoutUser,
-        setCurrentUser
+        setCurrentUser,
+        setDesignConfig
       }}
     >
       {children}

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   User, MapPin, Package, Plus, Trash2, CheckCircle, Lock,
-  ArrowLeft, Printer, RotateCcw, Award, ShieldCheck, LogIn
+  ArrowLeft, Printer, RotateCcw, Award, ShieldCheck, LogIn, Gift, Copy, Download
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { SavedAddress, Order } from '../types';
+import { SavedAddress, Order, ReferralSummary } from '../types';
 import { authFetch } from '../utils/authToken';
+import { downloadOrderInvoicePdf } from '../utils/invoicePdf';
 
 export const AccountPage: React.FC = () => {
   const {
@@ -30,12 +31,19 @@ export const AccountPage: React.FC = () => {
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
 
   useEffect(() => {
     if (currentUser) {
       setName(currentUser.name);
       setSkinType(currentUser.skinType || userProfile.skinType || 'Mixte à sensible');
       setAddresses(currentUser.savedAddresses || userProfile.savedAddresses || []);
+      authFetch('/api/account/referral')
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.referralCode) setReferralSummary(data);
+        })
+        .catch(() => {});
     }
   }, [currentUser, userProfile]);
 
@@ -263,6 +271,49 @@ export const AccountPage: React.FC = () => {
               Modifier le mot de passe
             </button>
           </form>
+
+          {/* Referral Card */}
+          <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-3xl border border-blue-200 p-6 space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-black text-blue-950 text-base flex items-center gap-2">
+                <Gift className="w-4 h-4 text-blue-700" /> Programme Parrainage
+              </h2>
+              <span className="text-xs font-bold text-blue-800 bg-white px-2.5 py-1 rounded-full border border-blue-200 tabular-nums">
+                {referralSummary?.referralsCount ?? currentUser.referralsCount ?? 0} filleul(s)
+              </span>
+            </div>
+            <p className="text-xs text-blue-900/80 leading-relaxed">
+              Partagez votre code personnel : vos proches reçoivent <strong>-10%</strong> dès leur première commande et vous gagnez <strong>+150 pts fidélité</strong> à chaque commande validée.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-white border border-blue-200 rounded-xl px-3.5 py-2.5 font-mono font-black text-sm text-blue-900 tracking-wider">
+                {referralSummary?.referralCode || currentUser.referralCode || 'MYR-CLIENT'}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const code = referralSummary?.referralCode || currentUser.referralCode || '';
+                  if (!code) return;
+                  navigator.clipboard?.writeText(code);
+                  showToast(`Code parrain ${code} copié !`);
+                }}
+                className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl inline-flex items-center gap-1.5 shrink-0"
+              >
+                <Copy className="w-3.5 h-3.5" /> Copier
+              </button>
+            </div>
+            {referralSummary && referralSummary.referrals.length > 0 && (
+              <div className="pt-2 border-t border-blue-200/70 space-y-1.5 text-xs">
+                <div className="font-bold text-blue-950">Derniers filleuls</div>
+                {referralSummary.referrals.slice(0, 3).map(ref => (
+                  <div key={ref.id} className="flex justify-between text-blue-900 tabular-nums">
+                    <span className="truncate">{ref.referredEmail}</span>
+                    <span className="font-bold text-emerald-700 shrink-0">+{ref.rewardPoints} pts</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: Saved Addresses */}
@@ -569,10 +620,17 @@ export const OrdersPage: React.FC = () => {
                     </button>
                   )}
                   <button
+                    type="button"
+                    onClick={() => downloadOrderInvoicePdf(order)}
+                    className="px-4 py-2 bg-white border border-blue-200 hover:bg-blue-50 text-blue-800 font-bold text-xs rounded-xl inline-flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Télécharger PDF
+                  </button>
+                  <button
                     onClick={() => navigate(`/commande-confirmee/${encodeURIComponent(order.id)}`)}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl inline-flex items-center gap-1.5"
                   >
-                    <Printer className="w-3.5 h-3.5" /> Facture &amp; Récapitulatif
+                    <Printer className="w-3.5 h-3.5" /> Récapitulatif
                   </button>
                 </div>
               </div>

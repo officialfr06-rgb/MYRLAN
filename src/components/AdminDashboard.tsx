@@ -4,18 +4,26 @@ import {
   Plus, Search, Edit, Trash2, ShieldCheck, AlertTriangle, TrendingUp,
   Store, LogOut, LogIn, X, CheckCircle, ExternalLink, ChevronRight,
   Menu, Eye, Printer, ArrowUpRight, Filter, Euro, BarChart3,
-  MessageCircle, Send, Globe, Calendar, ShieldAlert, Download, Lock
+  MessageCircle, Send, Globe, Calendar, ShieldAlert, Download, Lock, Palette, MailCheck, Megaphone, Bell
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useShop } from '../context/ShopContext';
 import { CATEGORIES } from '../data/mockProducts';
-import { Product, Order, AdminUserSummary, Prescription, ContactMessage, ChatSession, PharmacyAppointment } from '../types';
+import {
+  Product, Order, AdminUserSummary, Prescription, ContactMessage, ChatSession,
+  PharmacyAppointment, RestockConfig, RestockNotification, RestockEmailRecord
+} from '../types';
 import { AdminAnalyticsCharts } from './AdminAnalyticsCharts';
 import { AdminStockDashboard } from './AdminStockDashboard';
 import { AdminWebmasterDashboard } from './AdminWebmasterDashboard';
 import { AdminAppointmentsDashboard } from './AdminAppointmentsDashboard';
 import { AdminSecurityDashboard } from './AdminSecurityDashboard';
+import { AdminDesignDashboard } from './AdminDesignDashboard';
+import { AdminEmailTemplatesDashboard } from './AdminEmailTemplatesDashboard';
+import { AdminCrmDashboard } from './AdminCrmDashboard';
+import { RestockEmailModal } from './RestockEmailModal';
 import { authFetch } from '../utils/authToken';
+import { downloadOrderInvoicePdf } from '../utils/invoicePdf';
 
 type AdminTab =
   | 'overview'
@@ -27,6 +35,9 @@ type AdminTab =
   | 'promos'
   | 'users'
   | 'messages'
+  | 'crm'
+  | 'design'
+  | 'email_templates'
   | 'webmaster'
   | 'security';
 
@@ -78,6 +89,19 @@ export const AdminDashboard: React.FC = () => {
   const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [appointments, setAppointments] = useState<PharmacyAppointment[]>([]);
+
+  // Automatic Critical Stock Notification & Restock Email state
+  const [restockConfig, setRestockConfig] = useState<RestockConfig>({
+    criticalThreshold: 5,
+    targetStock: 25,
+    supplierEmail: 'approvisionnement@grossiste-pharma.fr',
+    supplierName: 'Grossiste Répartiteur Myrlan',
+    autoNotifyOnOrder: true
+  });
+  const [restockNotifications, setRestockNotifications] = useState<RestockNotification[]>([]);
+  const [restockEmails, setRestockEmails] = useState<RestockEmailRecord[]>([]);
+  const [isStockNotifOpen, setIsStockNotifOpen] = useState(false);
+  const [restockModalProducts, setRestockModalProducts] = useState<Product[] | null>(null);
 
   // Promo form
   const [newPromo, setNewPromo] = useState({ code: '', discountPercent: 15, minOrder: 0, description: '' });
@@ -142,9 +166,18 @@ export const AdminDashboard: React.FC = () => {
         if (Array.isArray(d)) setAppointments(d);
       })
       .catch(() => {});
+
+    authFetch('/api/admin/restock')
+      .then(r => r.json())
+      .then(d => {
+        if (d?.config) setRestockConfig(d.config);
+        if (Array.isArray(d?.notifications)) setRestockNotifications(d.notifications);
+        if (Array.isArray(d?.restockEmails)) setRestockEmails(d.restockEmails);
+      })
+      .catch(() => {});
   }, [currentUser, orders.length]);
 
-  // Live Socket.IO sync for Admin Inbox & Prescriptions
+  // Live Socket.IO sync for Admin Inbox, Prescriptions & Automatic Critical Stock Alerts
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
     const socket = io();
@@ -175,10 +208,32 @@ export const AdminDashboard: React.FC = () => {
       if (Array.isArray(updatedAppts)) setAppointments(updatedAppts);
     });
 
+    socket.on('restock-notifications-updated', (updatedNotifs: RestockNotification[]) => {
+      if (Array.isArray(updatedNotifs)) setRestockNotifications(updatedNotifs);
+    });
+
+    socket.on('restock-config-updated', (updatedCfg: RestockConfig) => {
+      if (updatedCfg && typeof updatedCfg === 'object') setRestockConfig(updatedCfg);
+    });
+
+    socket.on('critical-stock-alert', (payload: { threshold: number; triggered: RestockNotification[]; notifications: RestockNotification[] }) => {
+      if (Array.isArray(payload?.notifications)) {
+        setRestockNotifications(payload.notifications);
+      }
+      if (Array.isArray(payload?.triggered) && payload.triggered.length > 0) {
+        const first = payload.triggered[0];
+        showToast(
+          payload.triggered.length === 1
+            ? `Alerte stock critique : ${first.productName} (${first.currentStock} u. restantes)`
+            : `Alerte stock critique : ${payload.triggered.length} références sous le seuil de ${payload.threshold} u.`
+        );
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
-  }, [currentUser]);
+  }, [currentUser, showToast]);
 
   // Keep selectedOrder synced when status updates
   useEffect(() => {
@@ -188,12 +243,56 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [orders, selectedOrder]);
 
+  const handleUpdateRestockConfig = async (patch: Partial<RestockConfig>) => {
+    try {
+      const res = await authFetch('/api/admin/restock/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+      const data = await res.json();
+      if (data.success && data.config) {
+        setRestockConfig(data.config);
+        if (Array.isArray(data.notifications)) setRestockNotifications(data.notifications);
+        showToast(`Seuil critique mis à jour (≤ ${data.config.criticalThreshold} u.).`);
+      } else {
+        showToast(data.error || 'Impossible de mettre à jour les paramètres.');
+      }
+    } catch {
+      showToast('Erreur réseau.');
+    }
+  };
+
+  const handleAcknowledgeAllStockNotifs = async () => {
+    try {
+      const res = await authFetch('/api/admin/restock/acknowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true })
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.notifications)) {
+        setRestockNotifications(data.notifications);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   // Derived metrics
   const totalRevenue = useMemo(() => orders.reduce((acc, o) => acc + o.totalAmount, 0), [orders]);
   const avgOrderValue = useMemo(() => (orders.length > 0 ? totalRevenue / orders.length : 0), [orders, totalRevenue]);
   const pendingOrdersCount = useMemo(() => orders.filter(o => o.status === 'En préparation').length, [orders]);
-  const lowStockProducts = useMemo(() => products.filter(p => p.stock <= 5), [products]);
-  const restockWatchCount = useMemo(() => products.filter(p => p.stock <= 15).length, [products]);
+  const criticalThreshold = restockConfig.criticalThreshold || 5;
+  const lowStockProducts = useMemo(
+    () => [...products].filter(p => p.stock <= criticalThreshold).sort((a, b) => a.stock - b.stock),
+    [products, criticalThreshold]
+  );
+  const unreadCriticalNotifsCount = useMemo(
+    () => restockNotifications.filter(n => !n.acknowledged).length,
+    [restockNotifications]
+  );
+  const restockWatchCount = useMemo(() => products.filter(p => p.stock <= Math.max(criticalThreshold, 15)).length, [products, criticalThreshold]);
   const pendingRxCount = useMemo(() => prescriptions.filter(p => p.status === 'En attente').length, [prescriptions]);
   const confirmedApptsCount = useMemo(() => appointments.filter(a => a.status === 'Confirmé').length, [appointments]);
   const unreadContactCount = useMemo(() => contactMessages.filter(m => m.status === 'Nouveau').length, [contactMessages]);
@@ -213,11 +312,11 @@ export const AdminDashboard: React.FC = () => {
         inventoryStockFilter === 'all'
           ? true
           : inventoryStockFilter === 'low'
-            ? p.stock > 0 && p.stock <= 5
+            ? p.stock > 0 && p.stock <= criticalThreshold
             : p.stock === 0;
       return matchSearch && matchCat && matchStock;
     });
-  }, [products, inventorySearch, inventoryCategory, inventoryStockFilter]);
+  }, [products, inventorySearch, inventoryCategory, inventoryStockFilter, criticalThreshold]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
@@ -527,14 +626,17 @@ export const AdminDashboard: React.FC = () => {
       ]
     },
     {
-      title: 'Annuaire',
+      title: 'Annuaire & CRM',
       items: [
-        { id: 'users', label: 'Clients & Comptes', icon: <Users className="w-4 h-4" /> }
+        { id: 'users', label: 'Clients & Comptes', icon: <Users className="w-4 h-4" /> },
+        { id: 'crm', label: 'CRM & Newsletter', icon: <Megaphone className="w-4 h-4" /> }
       ]
     },
     {
-      title: 'Webmaster & Sécurité',
+      title: 'Design & Webmaster',
       items: [
+        { id: 'design', label: 'Design & Hero', icon: <Palette className="w-4 h-4" /> },
+        { id: 'email_templates', label: 'Templates Emails', icon: <MailCheck className="w-4 h-4" /> },
         { id: 'webmaster', label: 'Sitemap & SEO', icon: <Globe className="w-4 h-4" /> },
         { id: 'security', label: 'Sécurité & Pare-feu', icon: <ShieldAlert className="w-4 h-4" /> }
       ]
@@ -551,6 +653,9 @@ export const AdminDashboard: React.FC = () => {
     promos: 'Codes Promo & Remises',
     users: 'Clients & Comptes',
     messages: 'Messages Patients',
+    crm: 'CRM, Newsletter & Parrainage',
+    design: 'Design & Modèles Hero',
+    email_templates: 'Templates Emails & Notifications',
     webmaster: 'Outils Webmaster & SEO',
     security: 'Sécurité, Pare-feu & Anti-Phishing'
   };
@@ -692,6 +797,145 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Automatic Critical Stock Notification Center Trigger */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsStockNotifOpen(prev => !prev)}
+                aria-expanded={isStockNotifOpen}
+                aria-label="Notifications de stock critique"
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 tabular-nums ${
+                  lowStockProducts.length > 0
+                    ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Bell className={`w-3.5 h-3.5 ${lowStockProducts.length > 0 ? 'text-amber-700' : 'text-slate-500'}`} />
+                <span className="hidden md:inline">Alertes stock</span>
+                <span className={`font-mono font-bold ${lowStockProducts.length > 0 ? 'text-rose-700' : 'text-slate-500'}`}>
+                  {lowStockProducts.length}
+                </span>
+              </button>
+
+              {isStockNotifOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setIsStockNotifOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-[360px] sm:w-[420px] max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl shadow-xl z-40 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2 bg-slate-50">
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">
+                          Notifications Stock Critique (≤ {criticalThreshold} u.)
+                        </div>
+                        <div className="text-[11px] text-slate-500 tabular-nums">
+                          {lowStockProducts.length} produit(s) en alerte · {unreadCriticalNotifsCount} non lue(s)
+                        </div>
+                      </div>
+                      {unreadCriticalNotifsCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleAcknowledgeAllStockNotifs}
+                          className="text-[11px] font-semibold text-blue-700 hover:underline whitespace-nowrap"
+                        >
+                          Tout marquer lu
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quick Critical Threshold Selector */}
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-slate-500 font-medium">Seuil critique :</span>
+                      <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-md">
+                        {[5, 10, 15, 20].map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => handleUpdateRestockConfig({ criticalThreshold: val })}
+                            className={`px-2 py-0.5 rounded text-[11px] font-semibold tabular-nums transition-colors ${
+                              criticalThreshold === val
+                                ? 'bg-slate-900 text-white'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            ≤ {val}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Critical Products List */}
+                    <div className="max-h-72 overflow-y-auto overscroll-contain divide-y divide-slate-100">
+                      {lowStockProducts.length === 0 ? (
+                        <div className="p-6 text-center space-y-1.5">
+                          <CheckCircle className="w-6 h-6 text-emerald-600 mx-auto" />
+                          <div className="text-xs font-semibold text-slate-800">
+                            Aucun produit sous le seuil de {criticalThreshold} unités
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Vous serez alerté automatiquement dès qu’une commande fait passer un stock sous ce seuil.
+                          </div>
+                        </div>
+                      ) : (
+                        lowStockProducts.map(p => (
+                          <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-slate-50/70">
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-slate-900 truncate">{p.name}</div>
+                              <div className="text-[11px] text-slate-500 tabular-nums">
+                                <span>{p.brand}</span>
+                                <span aria-hidden="true"> · </span>
+                                <span className={`font-mono font-bold ${p.stock === 0 ? 'text-rose-700' : 'text-amber-700'}`}>
+                                  {p.stock === 0 ? 'Rupture (0 u.)' : `${p.stock} u. restantes`}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsStockNotifOpen(false);
+                                setRestockModalProducts([p]);
+                              }}
+                              className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-blue-50 hover:border-blue-300 text-blue-700 text-[11px] font-semibold rounded-lg inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                            >
+                              <Mail className="w-3 h-3" /> Mail
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Panel Footer */}
+                    <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsStockNotifOpen(false);
+                          setActiveTab('stock_levels');
+                        }}
+                        className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                      >
+                        Voir niveaux de stock →
+                      </button>
+                      {lowStockProducts.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsStockNotifOpen(false);
+                            setRestockModalProducts(lowStockProducts);
+                          }}
+                          className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Générer mail groupé ({lowStockProducts.length})</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={() => navigate('/')}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg whitespace-nowrap"
@@ -718,6 +962,65 @@ export const AdminDashboard: React.FC = () => {
           {/* ========================================================== */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Automatic Critical Stock Notification Banner */}
+              {lowStockProducts.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 sm:p-5 space-y-3">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-bold text-slate-900">
+                          Notification automatique : {lowStockProducts.length} produit(s) en seuil critique (≤ {criticalThreshold} u.)
+                        </h2>
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          Générez un bon de réapprovisionnement pré-rempli à destination de {restockConfig.supplierName} ({restockConfig.supplierEmail}).
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setRestockModalProducts(lowStockProducts)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg whitespace-nowrap"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Générer un mail de réapprovisionnement</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('stock_levels')}
+                        className="px-3 py-2 bg-white border border-amber-300 hover:bg-amber-100/60 text-amber-950 text-xs font-semibold rounded-lg whitespace-nowrap"
+                      >
+                        Gérer les stocks
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-amber-200/80 pt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 tabular-nums">
+                    {lowStockProducts.slice(0, 6).map(p => (
+                      <div
+                        key={p.id}
+                        className="bg-white border border-amber-200/80 rounded-lg px-3 py-2 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 truncate">{p.name}</div>
+                          <div className="text-[11px] text-slate-500">
+                            {p.brand} · <span className={`font-mono font-bold ${p.stock === 0 ? 'text-rose-700' : 'text-amber-700'}`}>{p.stock} u.</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRestockModalProducts([p])}
+                          className="text-[11px] font-semibold text-blue-700 hover:underline whitespace-nowrap shrink-0"
+                        >
+                          Mail
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 4 KPI Metrics Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 tabular-nums">
                 <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
@@ -746,7 +1049,7 @@ export const AdminDashboard: React.FC = () => {
 
                 <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-                    <span>Alertes Stock (≤ 5)</span>
+                    <span>Alertes Stock (≤ {criticalThreshold} u.)</span>
                     <AlertTriangle className={`w-4 h-4 ${lowStockProducts.length > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
                   </div>
                   <div className="text-2xl font-bold text-slate-900">{lowStockProducts.length}</div>
@@ -850,12 +1153,22 @@ export const AdminDashboard: React.FC = () => {
                               <div className="text-xs font-semibold text-slate-900 truncate">{p.name}</div>
                               <div className="text-[11px] text-amber-800 font-medium tabular-nums">Stock restant : {p.stock} u.</div>
                             </div>
-                            <button
-                              onClick={() => updateProductStock(p.id, p.stock + 10)}
-                              className="px-2.5 py-1 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 text-[11px] font-bold rounded shrink-0"
-                            >
-                              +10
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setRestockModalProducts([p])}
+                                className="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-[11px] font-semibold rounded inline-flex items-center gap-1"
+                                title="Générer un mail de réapprovisionnement"
+                              >
+                                <Mail className="w-3 h-3 text-blue-700" /> Mail
+                              </button>
+                              <button
+                                onClick={() => updateProductStock(p.id, p.stock + 10)}
+                                className="px-2.5 py-1 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 text-[11px] font-bold rounded"
+                              >
+                                +10
+                              </button>
+                            </div>
                           </div>
                         ))}
 
@@ -1007,6 +1320,10 @@ export const AdminDashboard: React.FC = () => {
               updateProductStock={updateProductStock}
               onOpenInventory={() => setActiveTab('inventory')}
               showToast={showToast}
+              restockConfig={restockConfig}
+              restockEmails={restockEmails}
+              onUpdateRestockConfig={handleUpdateRestockConfig}
+              onOpenRestockEmail={(targetProducts) => setRestockModalProducts(targetProducts)}
             />
           )}
 
@@ -1040,7 +1357,7 @@ export const AdminDashboard: React.FC = () => {
                   <Filter className="w-3.5 h-3.5 text-slate-400 mr-1" />
                   {[
                     { id: 'all', label: 'Tous' },
-                    { id: 'low', label: 'Stock faible (≤5)' },
+                    { id: 'low', label: `Stock critique (≤${criticalThreshold})` },
                     { id: 'out', label: 'Rupture' }
                   ].map(f => (
                     <button
@@ -1091,12 +1408,21 @@ export const AdminDashboard: React.FC = () => {
                           </td>
                           <td className="py-2.5 px-4">
                             <div className="inline-flex items-center gap-1.5">
-                              <span className={`w-2 h-2 rounded-full ${p.stock === 0 ? 'bg-rose-600' : p.stock <= 5 ? 'bg-amber-500' : 'bg-emerald-600'}`} />
+                              <span className={`w-2 h-2 rounded-full ${p.stock === 0 ? 'bg-rose-600' : p.stock <= criticalThreshold ? 'bg-amber-500' : 'bg-emerald-600'}`} />
                               <span className="font-bold text-slate-800">{p.stock} u.</span>
                             </div>
                           </td>
                           <td className="py-2.5 px-4 text-right">
                             <div className="inline-flex items-center gap-1">
+                              {p.stock <= criticalThreshold && (
+                                <button
+                                  onClick={() => setRestockModalProducts([p])}
+                                  className="px-2 py-1 border border-rose-200 bg-rose-50 hover:bg-rose-100 rounded text-rose-700 font-bold inline-flex items-center gap-1 whitespace-nowrap"
+                                  title="Générer un mail de réapprovisionnement"
+                                >
+                                  <Mail className="w-3 h-3" /> Réappro
+                                </button>
+                              )}
                               <button
                                 onClick={() => updateProductStock(p.id, p.stock - 1)}
                                 className="px-2 py-1 border border-slate-200 bg-white hover:bg-slate-100 rounded text-slate-700 font-bold"
@@ -1661,7 +1987,27 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* ========================================================== */}
-          {/* VIEW 8: WEBMASTER & SEO TOOLS                              */}
+          {/* VIEW 8: DESIGN & HERO THEME SELECTOR                       */}
+          {/* ========================================================== */}
+          {activeTab === 'design' && (
+            <AdminDesignDashboard
+              showToast={showToast}
+              onNavigateStore={() => navigate('/')}
+            />
+          )}
+
+          {/* ========================================================== */}
+          {/* VIEW 9: EMAIL TEMPLATES & NOTIFICATIONS                    */}
+          {/* ========================================================== */}
+          {activeTab === 'email_templates' && (
+            <AdminEmailTemplatesDashboard
+              showToast={showToast}
+              adminEmail={currentUser.email}
+            />
+          )}
+
+          {/* ========================================================== */}
+          {/* VIEW 9: WEBMASTER & SEO TOOLS                              */}
           {/* ========================================================== */}
           {activeTab === 'webmaster' && (
             <AdminWebmasterDashboard
@@ -1672,14 +2018,19 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* ========================================================== */}
-          {/* VIEW 9: PHARMACY APPOINTMENTS                              */}
+          {/* VIEW 10: PHARMACY APPOINTMENTS                             */}
           {/* ========================================================== */}
           {activeTab === 'appointments' && (
             <AdminAppointmentsDashboard showToast={showToast} />
           )}
 
           {/* ========================================================== */}
-          {/* VIEW 10: SECURITY, FIREWALL & ANTI-PHISHING                */}
+          {activeTab === 'crm' && (
+            <AdminCrmDashboard showToast={showToast} />
+          )}
+
+          {/* ========================================================== */}
+          {/* VIEW 11: SECURITY, FIREWALL & ANTI-PHISHING                */}
           {/* ========================================================== */}
           {activeTab === 'security' && (
             <AdminSecurityDashboard showToast={showToast} />
@@ -1767,10 +2118,17 @@ export const AdminDashboard: React.FC = () => {
 
             <div className="p-4 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
               <button
+                type="button"
+                onClick={() => downloadOrderInvoicePdf(selectedOrder)}
+                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" /> Télécharger PDF
+              </button>
+              <button
                 onClick={() => navigate(`/commande-confirmee/${encodeURIComponent(selectedOrder.id)}`)}
                 className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
               >
-                <Printer className="w-3.5 h-3.5" /> Facture PDF
+                <Printer className="w-3.5 h-3.5" /> Aperçu Facture
               </button>
             </div>
           </div>
@@ -2079,6 +2437,19 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      {/* ================================================================== */}
+      {/* MODAL: RESTOCK PROCUREMENT EMAIL GENERATOR                         */}
+      {/* ================================================================== */}
+      <RestockEmailModal
+        isOpen={Boolean(restockModalProducts)}
+        initialProducts={restockModalProducts || []}
+        config={restockConfig}
+        onClose={() => setRestockModalProducts(null)}
+        onEmailSent={(record) => {
+          setRestockEmails(prev => [record, ...prev]);
+        }}
+        showToast={showToast}
+      />
     </div>
   );
 };

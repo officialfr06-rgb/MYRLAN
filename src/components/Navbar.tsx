@@ -4,6 +4,7 @@ import {
   Package, ShieldCheck, Search, User, Settings, Store, Menu, X
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { useBodyScrollLock } from '../utils/scrollLock';
 
 export const Navbar: React.FC = () => {
   const {
@@ -27,6 +28,17 @@ export const Navbar: React.FC = () => {
 
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
+  useBodyScrollLock(mobileMenuOpen);
+
+  React.useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [mobileMenuOpen]);
+
   const totalCartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const navLinks = [
@@ -49,6 +61,7 @@ export const Navbar: React.FC = () => {
   };
 
   return (
+    <>
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-blue-100 shadow-xs print:hidden">
       {/* Top Announcement Bar */}
       <div className="bg-gradient-to-r from-blue-700 via-sky-700 to-blue-800 text-white text-xs py-2 px-4 text-center font-medium flex items-center justify-center gap-6">
@@ -229,7 +242,7 @@ export const Navbar: React.FC = () => {
 
         {/* Mobile Search & Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-100 space-y-3 animate-in slide-in-from-top-2">
+          <div className="md:hidden py-4 border-t border-gray-100 space-y-3 max-h-[calc(100dvh-7.5rem)] overflow-y-auto overscroll-contain animate-in slide-in-from-top-2">
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
                 <Search className="w-4 h-4" />
@@ -305,5 +318,13 @@ export const Navbar: React.FC = () => {
         )}
       </div>
     </header>
+    {mobileMenuOpen && (
+      <div
+        className="fixed inset-0 z-30 bg-slate-950/35 backdrop-blur-[1px] touch-none md:hidden"
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+    )}
+    </>
   );
 };

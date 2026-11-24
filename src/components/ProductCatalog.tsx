@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Star, ShoppingBag, Heart, Eye, Filter, CheckCircle,
-  AlertTriangle, Sparkles, ArrowUpDown, X
+  AlertTriangle, Sparkles, ArrowUpDown, X, Scale
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { CATEGORIES } from '../data/mockProducts';
@@ -19,6 +19,8 @@ export const ProductCatalog: React.FC = () => {
     addToCart,
     wishlist,
     toggleWishlist,
+    compareList,
+    toggleCompare,
     setSelectedProductForDetail
   } = useShop();
 
@@ -150,6 +152,7 @@ export const ProductCatalog: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {sortedProducts.map(product => {
             const isWishlisted = wishlist.includes(product.id);
+            const isCompared = compareList.includes(product.id);
             return (
               <div
                 key={product.id}
@@ -236,8 +239,8 @@ export const ProductCatalog: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Price and Add to Cart */}
-                <div className="p-5 pt-0 flex items-center justify-between border-t border-gray-50 mt-2 tabular-nums">
+                {/* Price, Compare and Add to Cart */}
+                <div className="p-5 pt-0 flex items-center justify-between gap-2 border-t border-gray-50 mt-2 tabular-nums">
                   <div>
                     <div className="text-lg font-black text-blue-800">{product.price.toFixed(2)} €</div>
                     {product.oldPrice && (
@@ -245,18 +248,36 @@ export const ProductCatalog: React.FC = () => {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => addToCart(product)}
-                    disabled={product.stock <= 0}
-                    className={`p-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-1.5 ${
-                      product.stock > 0
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20 hover:scale-105'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                    }`}
-                    title="Ajouter au panier"
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleCompare(product.id)}
+                      aria-pressed={isCompared}
+                      aria-label={isCompared ? `Retirer ${product.name} du comparateur` : `Comparer ${product.name}`}
+                      title={isCompared ? 'Retirer du comparateur' : 'Comparer ce produit'}
+                      className={`p-2.5 rounded-xl border font-semibold transition-all flex items-center gap-1 text-xs ${
+                        isCompared
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-blue-700'
+                      }`}
+                    >
+                      <Scale className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => addToCart(product)}
+                      disabled={product.stock <= 0}
+                      className={`p-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-1.5 ${
+                        product.stock > 0
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20 hover:scale-105'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                      }`}
+                      title="Ajouter au panier"
+                      aria-label={`Ajouter ${product.name} au panier`}
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
               </div>

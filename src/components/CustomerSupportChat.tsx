@@ -1,20 +1,72 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send } from 'lucide-react';
+import { X, Send, MessageCircle } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
 export const CustomerSupportChat: React.FC = () => {
-  const { chatMessages, sendChatMessage, isChatOpen, setIsChatOpen, currentUser } = useShop();
+  const {
+    chatMessages,
+    sendChatMessage,
+    isChatOpen,
+    setIsChatOpen,
+    currentUser,
+    compareList,
+    isCompareOpen
+  } = useShop();
   const [inputText, setInputText] = useState('');
   const [guestName, setGuestName] = useState(() => localStorage.getItem('myrlan_chat_guest_name') || '');
+  const [seenCount, setSeenCount] = useState<number>(() => chatMessages.length);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isChatOpen) {
+      setSeenCount(chatMessages.length);
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages, isChatOpen]);
 
-  if (!isChatOpen) return null;
+  useEffect(() => {
+    if (!isChatOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsChatOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isChatOpen, setIsChatOpen]);
+
+  const unreadPharmacistCount = !isChatOpen
+    ? chatMessages
+        .slice(seenCount)
+        .filter(m => m.sender === 'pharmacist' || m.sender === 'bot').length
+    : 0;
+
+  const isCompareBarVisible = compareList.length > 0 && !isCompareOpen;
+
+  if (!isChatOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsChatOpen(true)}
+        aria-label="Ouvrir le tchat avec notre pharmacienne"
+        title="Ouvrir le tchat pharmacien"
+        className={`fixed right-4 sm:right-6 z-40 h-12 sm:h-12 w-12 sm:w-auto sm:px-4 rounded-full sm:rounded-2xl bg-blue-900 hover:bg-blue-800 text-white border border-blue-800 shadow-lg hover:shadow-xl inline-flex items-center justify-center gap-2.5 transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 print:hidden ${
+          isCompareBarVisible ? 'bottom-20 sm:bottom-24' : 'bottom-4 sm:bottom-6'
+        }`}
+      >
+        <MessageCircle className="w-5 h-5 shrink-0" />
+        <span className="hidden sm:inline text-xs font-bold whitespace-nowrap shrink-0">
+          Tchat pharmacien
+        </span>
+        {unreadPharmacistCount > 0 && (
+          <span
+            aria-label={`${unreadPharmacistCount} nouveau(x) message(s)`}
+            className="absolute -top-1.5 -right-1.5 sm:static min-w-5 h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold inline-flex items-center justify-center tabular-nums"
+          >
+            {unreadPharmacistCount}
+          </span>
+        )}
+      </button>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +83,13 @@ export const CustomerSupportChat: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:bottom-6 sm:right-6 z-50 sm:w-full sm:max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[min(540px,calc(100dvh-1.5rem))] animate-in slide-in-from-bottom-4 duration-300">
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-slate-950/25 sm:bg-slate-950/15 backdrop-blur-[1px] touch-none"
+        onClick={() => setIsChatOpen(false)}
+        aria-hidden="true"
+      />
+      <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:bottom-6 sm:right-6 z-50 sm:w-full sm:max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col h-[min(540px,calc(100dvh-1.5rem))] animate-in slide-in-from-bottom-4 duration-300">
 
       {/* Header */}
       <div className="p-4 bg-blue-900 text-white flex items-center justify-between shrink-0">
@@ -70,7 +128,7 @@ export const CustomerSupportChat: React.FC = () => {
       )}
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3 bg-gray-50/50">
         <div className="text-center py-1">
           <span className="text-[10px] font-semibold text-gray-400 bg-gray-200/60 px-3 py-1 rounded-full">
             Échange sécurisé &amp; confidentiel
@@ -125,5 +183,6 @@ export const CustomerSupportChat: React.FC = () => {
       </form>
 
     </div>
+    </>
   );
 };

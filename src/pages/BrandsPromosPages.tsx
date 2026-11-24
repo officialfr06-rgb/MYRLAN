@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Tag, Sparkles, ArrowLeft, ShoppingBag, Eye, Copy, CheckCircle, Award
+  Tag, Sparkles, ArrowLeft, ShoppingBag, Eye, Copy, CheckCircle, Award, Scale
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 
@@ -80,7 +80,7 @@ export const BrandsPage: React.FC = () => {
 };
 
 export const PromotionsPage: React.FC = () => {
-  const { products, promoCodes, addToCart, setSelectedProductForDetail, navigate, showToast } = useShop();
+  const { products, promoCodes, addToCart, setSelectedProductForDetail, navigate, showToast, compareList, toggleCompare } = useShop();
 
   const discountedProducts = products.filter(
     p => (p.oldPrice && p.oldPrice > p.price) || p.tags.includes('Promo')
@@ -192,6 +192,19 @@ export const PromotionsPage: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleCompare(product.id)}
+                        aria-pressed={compareList.includes(product.id)}
+                        className={`p-2.5 rounded-xl border transition-colors ${
+                          compareList.includes(product.id)
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                        title={compareList.includes(product.id) ? 'Retirer du comparateur' : 'Comparer'}
+                      >
+                        <Scale className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => setSelectedProductForDetail(product)}
                         className="p-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50"

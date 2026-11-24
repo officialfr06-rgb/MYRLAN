@@ -157,6 +157,18 @@ function parseCookies(cookieHeader?: string): Record<string, string> {
   return cookies;
 }
 
+function ensureUserReferralCode(user: any): string {
+  if (user?.referralCode && /^MYR-[A-Z0-9]{4,8}$/.test(String(user.referralCode))) {
+    return String(user.referralCode);
+  }
+  const seed = String(user?.id || user?.email || 'myrlan');
+  const code = `MYR-${crypto.createHash('sha256').update(seed).digest('hex').slice(0, 5).toUpperCase()}`;
+  if (user && typeof user === 'object') {
+    user.referralCode = code;
+  }
+  return code;
+}
+
 function sanitizeUser(user: any) {
   return {
     id: user.id,
@@ -165,7 +177,10 @@ function sanitizeUser(user: any) {
     role: user.role,
     skinType: user.skinType || 'Mixte à sensible',
     concerns: user.concerns || [],
-    savedAddresses: user.savedAddresses || []
+    savedAddresses: user.savedAddresses || [],
+    referralCode: ensureUserReferralCode(user),
+    loyaltyPoints: Number(user.loyaltyPoints || 0),
+    referralsCount: Number(user.referralsCount || 0)
   };
 }
 
@@ -405,6 +420,267 @@ const DEFAULT_WEBMASTER_CONFIG = {
   updatedAt: new Date().toISOString().split('T')[0]
 };
 
+const HERO_PRESET_IDS = ['officine_navy', 'botanique_sauge', 'clinique_ivoire', 'solaire_dore'] as const;
+
+const DEFAULT_DESIGN_CONFIG = {
+  activeHeroId: 'officine_navy',
+  customBadge: '',
+  customTitle: '',
+  customSubtitle: '',
+  customPrimaryCtaLabel: '',
+  showTrustBar: true,
+  updatedAt: new Date().toISOString().split('T')[0]
+};
+
+const TODAY_ISO = new Date().toISOString().split('T')[0];
+
+const DEFAULT_EMAIL_TEMPLATES = [
+  {
+    id: 'order_confirmed',
+    name: 'Commande confirmée',
+    category: 'Commandes',
+    statusLabel: 'Confirmée / En préparation',
+    triggerEvent: 'Déclenché automatiquement dès la validation du paiement ou de la commande.',
+    enabled: true,
+    subject: 'Confirmation de votre commande {{orderId}} — Myrlan Officine',
+    heading: 'Merci {{patientName}}, votre commande est confirmée !',
+    body: 'Nous avons bien reçu votre commande {{orderId}} d’un montant de {{totalAmount}}.\n\nNos préparateurs en pharmacie vérifient actuellement vos produits avant expédition via {{carrier}}.\nNuméro de suivi attribué : {{trackingNumber}}.',
+    ctaLabel: 'Suivre ma commande',
+    ctaPath: '/commandes',
+    accentColor: '#1d4ed8',
+    footerNote: 'Myrlan Parapharmacie Agréée — Des questions ? Répondez directement à notre pharmacienne depuis votre espace client.',
+    availableVariables: ['patientName', 'orderId', 'totalAmount', 'carrier', 'trackingNumber', 'orderDate'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'order_shipped',
+    name: 'Commande expédiée',
+    category: 'Commandes',
+    statusLabel: 'Expédié',
+    triggerEvent: 'Envoyé lorsque le statut de commande passe à « Expédié » dans le tableau de bord.',
+    enabled: true,
+    subject: 'Votre colis {{orderId}} est en route ({{trackingNumber}})',
+    heading: 'Bonne nouvelle {{patientName}}, votre colis vient d’être expédié !',
+    body: 'Votre commande {{orderId}} a quitté notre officine et a été remise au transporteur ({{carrier}}).\n\nVous pouvez suivre son acheminement en temps réel avec la référence : {{trackingNumber}}.',
+    ctaLabel: 'Suivre mon colis',
+    ctaPath: '/commandes',
+    accentColor: '#0284c7',
+    footerNote: 'Pensez à vérifier votre boîte mail ou SMS pour les alertes du livreur.',
+    availableVariables: ['patientName', 'orderId', 'carrier', 'trackingNumber', 'totalAmount'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'order_delivered',
+    name: 'Commande livrée',
+    category: 'Commandes',
+    statusLabel: 'Livré',
+    triggerEvent: 'Envoyé lorsque la commande est marquée comme « Livré ».',
+    enabled: true,
+    subject: 'Commande {{orderId}} livrée — Conseils & fidélité Myrlan',
+    heading: 'Votre commande {{orderId}} a bien été livrée',
+    body: 'Bonjour {{patientName}},\n\nNous espérons que vos soins vous donneront entière satisfaction. Votre achat vous a permis de cumuler {{loyaltyPoints}} points fidélité sur votre compte.\n\nNos pharmaciens restent à votre écoute dans le tchat en ligne pour tout conseil d’application.',
+    ctaLabel: 'Consulter mes commandes',
+    ctaPath: '/commandes',
+    accentColor: '#047857',
+    footerNote: 'Retours gratuits sous 14 jours sur les produits scellés non ouverts.',
+    availableVariables: ['patientName', 'orderId', 'loyaltyPoints', 'totalAmount'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'appointment_confirmed',
+    name: 'Rendez-vous confirmé',
+    category: 'Rendez-vous',
+    statusLabel: 'Confirmé',
+    triggerEvent: 'Envoyé automatiquement lorsqu’un patient réserve un créneau ou qu’un rendez-vous est confirmé.',
+    enabled: true,
+    subject: 'Rendez-vous confirmé le {{appointmentDate}} à {{appointmentSlot}} — Myrlan',
+    heading: 'Votre rendez-vous officinal {{appointmentId}} est confirmé',
+    body: 'Bonjour {{patientName}},\n\nNous confirmons votre rendez-vous pour : {{serviceLabel}}.\nDate & heure : le {{appointmentDate}} à {{appointmentSlot}}.\nFormat : {{appointmentFormat}}.\n\nMerci de vous présenter 5 minutes avant l’horaire prévu (ou de cliquer sur votre lien visio si applicable).',
+    ctaLabel: 'Gérer mes rendez-vous',
+    ctaPath: '/rendez-vous',
+    accentColor: '#1d4ed8',
+    footerNote: 'En cas d’empêchement, vous pouvez annuler ou déplacer votre créneau jusqu’à 2h avant.',
+    availableVariables: ['patientName', 'appointmentId', 'serviceLabel', 'appointmentDate', 'appointmentSlot', 'appointmentFormat'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'appointment_completed',
+    name: 'Rendez-vous terminé',
+    category: 'Rendez-vous',
+    statusLabel: 'Terminé',
+    triggerEvent: 'Envoyé lorsque le pharmacien clôture le rendez-vous au statut « Terminé ».',
+    enabled: true,
+    subject: 'Merci pour votre visite ({{appointmentId}}) — Suivi Myrlan',
+    heading: 'Compte-rendu de votre entretien officinal',
+    body: 'Bonjour {{patientName}},\n\nVotre rendez-vous ({{serviceLabel}}) du {{appointmentDate}} à {{appointmentSlot}} est désormais terminé.\n\nNote du pharmacien : {{pharmacistNote}}\n\nNotre équipe reste disponible pour adapter votre routine si besoin.',
+    ctaLabel: 'Accéder à mon dossier',
+    ctaPath: '/rendez-vous',
+    accentColor: '#047857',
+    footerNote: 'Document informatif confidentiel émis par l’équipe officinale Myrlan.',
+    availableVariables: ['patientName', 'appointmentId', 'serviceLabel', 'appointmentDate', 'appointmentSlot', 'pharmacistNote'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'appointment_cancelled',
+    name: 'Rendez-vous annulé',
+    category: 'Rendez-vous',
+    statusLabel: 'Annulé',
+    triggerEvent: 'Envoyé lorsqu’un rendez-vous est annulé par le patient ou par l’officine.',
+    enabled: true,
+    subject: 'Annulation du rendez-vous {{appointmentId}} du {{appointmentDate}}',
+    heading: 'Votre rendez-vous du {{appointmentDate}} a été annulé',
+    body: 'Bonjour {{patientName}},\n\nLe rendez-vous {{appointmentId}} ({{serviceLabel}}) initialement prévu le {{appointmentDate}} à {{appointmentSlot}} a bien été annulé.\n\nNote associée : {{pharmacistNote}}\nVous pouvez réserver un autre créneau à tout moment en ligne.',
+    ctaLabel: 'Reprendre rendez-vous',
+    ctaPath: '/rendez-vous',
+    accentColor: '#be123c',
+    footerNote: 'Besoin d’un créneau d’urgence ? Contactez directement l’officine.',
+    availableVariables: ['patientName', 'appointmentId', 'serviceLabel', 'appointmentDate', 'appointmentSlot', 'pharmacistNote'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'prescription_ready',
+    name: 'Ordonnance validée / prête',
+    category: 'Ordonnances',
+    statusLabel: 'Validée / Prête en officine',
+    triggerEvent: 'Envoyé quand le pharmacien passe l’ordonnance à « Validée par le pharmacien » ou « Prête en officine ».',
+    enabled: true,
+    subject: 'Votre ordonnance {{prescriptionId}} est {{prescriptionStatus}}',
+    heading: 'Mise à jour de votre ordonnance {{prescriptionId}}',
+    body: 'Bonjour {{patientName}},\n\nVotre ordonnance vient de passer au statut : {{prescriptionStatus}}.\nMode choisi : {{deliveryMode}}.\n\nCommentaire du pharmacien : {{pharmacistNote}}\n\nMerci de vous munir de l’original papier et de votre carte Vitale lors du retrait.',
+    ctaLabel: 'Suivre mon ordonnance',
+    ctaPath: '/ordonnance',
+    accentColor: '#047857',
+    footerNote: 'Traitement médical sécurisé et strictement confidentiel — Officine Myrlan.',
+    availableVariables: ['patientName', 'prescriptionId', 'prescriptionStatus', 'deliveryMode', 'pharmacistNote'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'prescription_refused',
+    name: 'Ordonnance refusée / à corriger',
+    category: 'Ordonnances',
+    statusLabel: 'Refusée',
+    triggerEvent: 'Envoyé quand une ordonnance est marquée « Refusée » (document illisible, expiré ou incomplet).',
+    enabled: true,
+    subject: 'Action requise sur votre ordonnance {{prescriptionId}}',
+    heading: 'Votre ordonnance {{prescriptionId}} nécessite une vérification',
+    body: 'Bonjour {{patientName}},\n\nNous n’avons pas pu valider votre ordonnance transmise en ligne.\nMotif indiqué par le pharmacien : {{pharmacistNote}}\n\nVous pouvez déposer une nouvelle photo lisible ou nous contacter sur le tchat patient.',
+    ctaLabel: 'Déposer un nouveau document',
+    ctaPath: '/ordonnance',
+    accentColor: '#b45309',
+    footerNote: 'La sécurité de dispensation reste notre priorité absolue.',
+    availableVariables: ['patientName', 'prescriptionId', 'prescriptionStatus', 'pharmacistNote'],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: 'back_in_stock',
+    name: 'Alerte Retour en Stock',
+    category: 'Catalogue & CRM',
+    statusLabel: 'Disponible en officine',
+    triggerEvent: 'Envoyé automatiquement aux clients en attente dès que le stock d’un produit repasse au-dessus de 0.',
+    enabled: true,
+    subject: '{{productName}} est de nouveau en stock — Myrlan Officine',
+    heading: 'Bonne nouvelle ! {{productName}} est de retour',
+    body: 'Bonjour,\n\nLe soin {{productName}} ({{productBrand}}) que vous suiviez vient d’être réapprovisionné dans notre pharmacie au tarif de {{productPrice}}.\n\nQuantité disponible actuellement : {{stockCount}} unité(s). Commandez dès maintenant avant la prochaine rupture.',
+    ctaLabel: 'Commander le produit',
+    ctaPath: '{{productPath}}',
+    accentColor: '#0284c7',
+    footerNote: 'Vous recevez cet e-mail car vous avez activé une alerte retour en stock sur Myrlan.',
+    availableVariables: ['productName', 'productBrand', 'productPrice', 'stockCount', 'productPath'],
+    updatedAt: TODAY_ISO
+  }
+];
+
+const SAMPLE_EMAIL_VARIABLES: Record<string, string> = {
+  patientName: 'Camille Laurent',
+  orderId: 'ORD-8421',
+  totalAmount: '64.40 €',
+  carrier: 'Colissimo Suivi',
+  trackingNumber: 'FR894210554',
+  orderDate: new Date().toISOString().split('T')[0],
+  loyaltyPoints: '64',
+  appointmentId: 'RDV-3092',
+  serviceLabel: 'Consultation Dermo-Cosmétique Sur-Mesure',
+  appointmentDate: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+  appointmentSlot: '14:30',
+  appointmentFormat: 'À l’officine',
+  pharmacistNote: 'Tout est conforme. Pensez à apporter votre routine actuelle.',
+  prescriptionId: 'RX-5120',
+  prescriptionStatus: 'Prête en officine',
+  deliveryMode: 'Retrait Click & Collect',
+  productName: 'Sérum Booster Acide Hyaluronique Pur',
+  productBrand: 'La Roche-Glow',
+  productPrice: '29.90 €',
+  stockCount: '18',
+  productPath: '/produit/p-1'
+};
+
+function escapeHtmlForEmail(raw: string): string {
+  return String(raw ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function interpolateTemplateVars(templateStr: string, vars: Record<string, string>, escapeHtml = false): string {
+  return String(templateStr || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => {
+    const val = vars[key] !== undefined && vars[key] !== '' ? String(vars[key]) : `—`;
+    return escapeHtml ? escapeHtmlForEmail(val) : val;
+  });
+}
+
+function renderEmailTemplate(tpl: any, vars: Record<string, string>, baseUrl: string) {
+  const safeColor = /^#[0-9a-fA-F]{6}$/.test(String(tpl.accentColor || '')) ? tpl.accentColor : '#1d4ed8';
+  const subject = interpolateTemplateVars(tpl.subject, vars, false);
+  const headingText = interpolateTemplateVars(tpl.heading, vars, false);
+  const bodyText = interpolateTemplateVars(tpl.body, vars, false);
+  const ctaLabel = interpolateTemplateVars(tpl.ctaLabel, vars, false);
+  const footerText = interpolateTemplateVars(tpl.footerNote, vars, false);
+  const safePath = String(tpl.ctaPath || '/').startsWith('/') ? tpl.ctaPath : '/';
+  const ctaUrl = `${baseUrl}${safePath}`;
+
+  const headingHtml = interpolateTemplateVars(tpl.heading, vars, true);
+  const bodyParagraphsHtml = interpolateTemplateVars(tpl.body, vars, true)
+    .split(/\n{2,}/)
+    .map(p => `<p style="margin:0 0 14px 0;color:#334155;font-size:14px;line-height:1.6;">${p.replace(/\n/g, '<br/>')}</p>`)
+    .join('');
+  const ctaLabelHtml = escapeHtmlForEmail(ctaLabel);
+  const footerHtml = escapeHtmlForEmail(footerText);
+  const statusHtml = escapeHtmlForEmail(String(tpl.statusLabel || ''));
+
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8" /><title>${escapeHtmlForEmail(subject)}</title></head>
+<body style="margin:0;padding:24px 12px;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+    <tr>
+      <td style="background:${safeColor};padding:20px 24px;color:#ffffff;">
+        <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">Myrlan Officine · ${statusHtml}</div>
+        <div style="font-size:20px;font-weight:800;margin-top:6px;line-height:1.3;">${headingHtml}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:24px;">
+        ${bodyParagraphsHtml}
+        <div style="margin-top:24px;">
+          <a href="${escapeHtmlForEmail(ctaUrl)}" style="display:inline-block;background:${safeColor};color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:12px 22px;border-radius:10px;">${ctaLabelHtml}</a>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px;line-height:1.5;">
+        ${footerHtml}
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `${headingText}\n\n${bodyText}\n\n${ctaLabel} : ${ctaUrl}\n\n---\n${footerText}`;
+  return { subject, html, text };
+}
+
 const PUBLIC_STOREFRONT_ROUTES = [
   { path: '/', label: 'Accueil & Catalogue', priority: '1.0', changefreq: 'daily' },
   { path: '/diagnostic', label: 'Diagnostic Peau & Santé', priority: '0.9', changefreq: 'weekly' },
@@ -514,6 +790,15 @@ function buildRobotsTxt(db: any, baseUrl: string): string {
   return raw;
 }
 
+const DEFAULT_RESTOCK_CONFIG = {
+  criticalThreshold: 5,
+  targetStock: 25,
+  supplierEmail: 'approvisionnement@grossiste-pharma.fr',
+  supplierName: 'Grossiste Répartiteur Myrlan',
+  autoNotifyOnOrder: true,
+  updatedAt: TODAY_ISO
+};
+
 function getDatabase() {
   if (!fs.existsSync(dbFilePath)) {
     const initialDb = {
@@ -534,7 +819,18 @@ function getDatabase() {
         officialDomain: ''
       },
       webmaster: { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] },
-      resetTokens: []
+      design: { ...DEFAULT_DESIGN_CONFIG },
+      emailTemplates: DEFAULT_EMAIL_TEMPLATES.map(t => ({ ...t })),
+      emailLogs: [],
+      resetTokens: [],
+      stockAlerts: [],
+      newsletterSubscribers: [],
+      emailCampaigns: [],
+      reviews: [],
+      referrals: [],
+      restockConfig: { ...DEFAULT_RESTOCK_CONFIG },
+      restockNotifications: [],
+      restockEmails: []
     };
     fs.writeFileSync(dbFilePath, JSON.stringify(initialDb, null, 2));
     return initialDb;
@@ -572,7 +868,56 @@ function getDatabase() {
         redirects: Array.isArray(parsed.webmaster.redirects) ? parsed.webmaster.redirects : []
       };
     }
+    if (!parsed.design || typeof parsed.design !== 'object') {
+      parsed.design = { ...DEFAULT_DESIGN_CONFIG };
+      dirty = true;
+    } else {
+      const validHero = HERO_PRESET_IDS.includes(parsed.design.activeHeroId)
+        ? parsed.design.activeHeroId
+        : DEFAULT_DESIGN_CONFIG.activeHeroId;
+      parsed.design = {
+        ...DEFAULT_DESIGN_CONFIG,
+        ...parsed.design,
+        activeHeroId: validHero,
+        showTrustBar: parsed.design.showTrustBar !== false
+      };
+    }
+    if (!Array.isArray(parsed.emailTemplates) || parsed.emailTemplates.length === 0) {
+      parsed.emailTemplates = DEFAULT_EMAIL_TEMPLATES.map(t => ({ ...t }));
+      dirty = true;
+    } else {
+      const existingIds = new Set(parsed.emailTemplates.map((t: any) => t.id));
+      for (const defTpl of DEFAULT_EMAIL_TEMPLATES) {
+        if (!existingIds.has(defTpl.id)) {
+          parsed.emailTemplates.push({ ...defTpl });
+          dirty = true;
+        }
+      }
+    }
+    if (!Array.isArray(parsed.emailLogs)) { parsed.emailLogs = []; dirty = true; }
     if (!Array.isArray(parsed.resetTokens)) { parsed.resetTokens = []; dirty = true; }
+    if (!Array.isArray(parsed.stockAlerts)) { parsed.stockAlerts = []; dirty = true; }
+    if (!Array.isArray(parsed.newsletterSubscribers)) { parsed.newsletterSubscribers = []; dirty = true; }
+    if (!Array.isArray(parsed.emailCampaigns)) { parsed.emailCampaigns = []; dirty = true; }
+    if (!Array.isArray(parsed.reviews)) { parsed.reviews = []; dirty = true; }
+    if (!Array.isArray(parsed.referrals)) { parsed.referrals = []; dirty = true; }
+    if (!parsed.restockConfig || typeof parsed.restockConfig !== 'object') {
+      parsed.restockConfig = { ...DEFAULT_RESTOCK_CONFIG };
+      dirty = true;
+    } else {
+      parsed.restockConfig = {
+        ...DEFAULT_RESTOCK_CONFIG,
+        ...parsed.restockConfig
+      };
+    }
+    if (!Array.isArray(parsed.restockNotifications)) { parsed.restockNotifications = []; dirty = true; }
+    if (!Array.isArray(parsed.restockEmails)) { parsed.restockEmails = []; dirty = true; }
+    for (const u of parsed.users) {
+      if (!u.referralCode) {
+        ensureUserReferralCode(u);
+        dirty = true;
+      }
+    }
     if (dirty) saveDatabase(parsed);
     return parsed;
   } catch {
@@ -581,6 +926,9 @@ function getDatabase() {
       orders: INITIAL_ORDERS,
       users: INITIAL_USERS,
       promoCodes: INITIAL_PROMOS,
+      restockConfig: { ...DEFAULT_RESTOCK_CONFIG },
+      restockNotifications: [],
+      restockEmails: [],
       prescriptions: [],
       contactMessages: [],
       chatSessions: [],
@@ -594,7 +942,15 @@ function getDatabase() {
         officialDomain: ''
       },
       webmaster: { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] },
-      resetTokens: []
+      design: { ...DEFAULT_DESIGN_CONFIG },
+      emailTemplates: DEFAULT_EMAIL_TEMPLATES.map(t => ({ ...t })),
+      emailLogs: [],
+      resetTokens: [],
+      stockAlerts: [],
+      newsletterSubscribers: [],
+      emailCampaigns: [],
+      reviews: [],
+      referrals: []
     };
   }
 }
@@ -825,6 +1181,163 @@ async function startServer() {
     jsonTransport: true
   });
 
+  async function sendTemplatedEmail(
+    db: any,
+    templateId: string,
+    to: string,
+    vars: Record<string, string>,
+    req?: Request,
+    overrideTemplate?: any
+  ) {
+    const cleanTo = String(to || '').trim();
+    if (!cleanTo || !cleanTo.includes('@')) return null;
+
+    const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES;
+    const tpl = overrideTemplate || templates.find((t: any) => t.id === templateId) || DEFAULT_EMAIL_TEMPLATES.find(t => t.id === templateId);
+    if (!tpl) return null;
+
+    const baseUrl = req ? resolveBaseUrl(req, db.webmaster) : (process.env.APP_URL || `http://localhost:${PORT}`);
+    const rendered = renderEmailTemplate(tpl, vars, baseUrl);
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    if (!tpl.enabled && !overrideTemplate) {
+      const disabledLog = {
+        id: `EML-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+        templateId: tpl.id,
+        templateName: tpl.name,
+        to: cleanTo,
+        subject: rendered.subject,
+        status: 'Désactivé',
+        sentAt: nowStr
+      };
+      db.emailLogs = [disabledLog, ...(Array.isArray(db.emailLogs) ? db.emailLogs : [])].slice(0, 80);
+      return { logEntry: disabledLog, rendered };
+    }
+
+    let dispatchStatus: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur' = hasAuth ? 'Envoyé (SMTP)' : 'Mode Aperçu';
+    try {
+      await smtpTransporter.sendMail({
+        from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
+        to: cleanTo,
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html
+      });
+    } catch {
+      dispatchStatus = hasAuth ? 'Erreur' : 'Mode Aperçu';
+    }
+
+    const logEntry = {
+      id: `EML-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+      templateId: tpl.id,
+      templateName: tpl.name,
+      to: cleanTo,
+      subject: rendered.subject,
+      status: dispatchStatus,
+      sentAt: nowStr
+    };
+    db.emailLogs = [logEntry, ...(Array.isArray(db.emailLogs) ? db.emailLogs : [])].slice(0, 80);
+    return { logEntry, rendered };
+  }
+
+  async function notifyBackInStock(db: any, product: any, req?: Request): Promise<number> {
+    if (!product || Number(product.stock || 0) <= 0 || !Array.isArray(db.stockAlerts)) return 0;
+    const pendingAlerts = db.stockAlerts.filter(
+      (a: any) => a.productId === product.id && a.status === 'En attente'
+    );
+    if (pendingAlerts.length === 0) return 0;
+
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    let sentCount = 0;
+    for (const alert of pendingAlerts) {
+      await sendTemplatedEmail(
+        db,
+        'back_in_stock',
+        alert.email,
+        {
+          productName: String(product.name || ''),
+          productBrand: String(product.brand || ''),
+          productPrice: `${Number(product.price || 0).toFixed(2)} €`,
+          stockCount: String(product.stock),
+          productPath: `/produit/${encodeURIComponent(String(product.id))}`
+        },
+        req
+      );
+      alert.status = 'Notifié';
+      alert.notifiedAt = nowStr;
+      sentCount += 1;
+    }
+    return sentCount;
+  }
+
+  function syncCriticalStockNotifications(db: any, touchedProducts?: any[]): any[] {
+    const cfg = db.restockConfig || DEFAULT_RESTOCK_CONFIG;
+    const threshold = Math.max(1, Number(cfg.criticalThreshold || 5));
+    if (!Array.isArray(db.restockNotifications)) db.restockNotifications = [];
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    const productsToCheck = Array.isArray(touchedProducts) && touchedProducts.length > 0
+      ? touchedProducts
+      : (db.products || []);
+
+    const newlyTriggered: any[] = [];
+    for (const p of productsToCheck) {
+      if (!p || !p.id) continue;
+      const stock = Number(p.stock || 0);
+      const existingIdx = db.restockNotifications.findIndex((n: any) => n.productId === p.id);
+
+      if (stock <= threshold) {
+        const severity = stock === 0 ? 'out' : 'critical';
+        if (existingIdx !== -1) {
+          const prev = db.restockNotifications[existingIdx];
+          const stockDropped = stock < Number(prev.currentStock);
+          db.restockNotifications[existingIdx] = {
+            ...prev,
+            productName: String(p.name || prev.productName),
+            brand: String(p.brand || prev.brand || ''),
+            ean: String(p.ean || prev.ean || ''),
+            currentStock: stock,
+            threshold,
+            severity,
+            acknowledged: stockDropped ? false : prev.acknowledged,
+            triggeredAt: stockDropped ? nowStr : prev.triggeredAt
+          };
+          if (stockDropped) newlyTriggered.push(db.restockNotifications[existingIdx]);
+        } else {
+          const notif = {
+            id: `RST-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+            productId: p.id,
+            productName: String(p.name || ''),
+            brand: String(p.brand || ''),
+            ean: String(p.ean || ''),
+            currentStock: stock,
+            threshold,
+            severity,
+            acknowledged: false,
+            triggeredAt: nowStr
+          };
+          db.restockNotifications.unshift(notif);
+          newlyTriggered.push(notif);
+        }
+      } else if (existingIdx !== -1) {
+        db.restockNotifications.splice(existingIdx, 1);
+      }
+    }
+
+    // Keep notifications sorted by severity (rupture first) then lowest stock
+    db.restockNotifications.sort((a: any, b: any) => Number(a.currentStock) - Number(b.currentStock));
+
+    if (newlyTriggered.length > 0 && cfg.autoNotifyOnOrder !== false) {
+      io.emit('critical-stock-alert', {
+        threshold,
+        triggered: newlyTriggered,
+        notifications: db.restockNotifications
+      });
+    }
+    io.emit('restock-notifications-updated', db.restockNotifications);
+    return newlyTriggered;
+  }
+
   io.on('connection', (socket) => {
     socket.on('disconnect', () => {});
   });
@@ -866,7 +1379,7 @@ async function startServer() {
     res.json({ success: true, product: newProduct });
   });
 
-  app.patch('/api/products/:id', requireAdmin, (req, res) => {
+  app.patch('/api/products/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const db = getDatabase();
     const idx = db.products.findIndex((p: any) => p.id === id);
@@ -874,6 +1387,7 @@ async function startServer() {
       return res.status(404).json({ success: false, error: 'Produit non trouvé.' });
     }
     const current = db.products[idx];
+    const prevStock = Number(current.stock || 0);
     const allowedFields = [
       'name', 'brand', 'category', 'price', 'oldPrice', 'image', 'stock',
       'description', 'ingredients', 'usage', 'tags', 'volume', 'ean', 'form', 'presentation', 'contenance'
@@ -893,9 +1407,14 @@ async function startServer() {
     }
 
     db.products[idx] = updated;
+    let notifiedCount = 0;
+    if (prevStock <= 0 && updated.stock > 0) {
+      notifiedCount = await notifyBackInStock(db, updated, req);
+    }
+    syncCriticalStockNotifications(db, [updated]);
     saveDatabase(db);
     io.emit('products-updated', db.products);
-    res.json({ success: true, product: updated });
+    res.json({ success: true, product: updated, notifiedCount });
   });
 
   app.delete('/api/products/:id', requireAdmin, (req, res) => {
@@ -906,24 +1425,32 @@ async function startServer() {
       return res.status(404).json({ success: false, error: 'Produit non trouvé.' });
     }
     db.products = db.products.filter((p: any) => p.id !== id);
+    db.restockNotifications = (db.restockNotifications || []).filter((n: any) => n.productId !== id);
     saveDatabase(db);
     io.emit('products-updated', db.products);
+    io.emit('restock-notifications-updated', db.restockNotifications);
     res.json({ success: true });
   });
 
-  app.put('/api/products/:id/stock', requireAdmin, (req, res) => {
+  app.put('/api/products/:id/stock', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { stock } = req.body;
     const db = getDatabase();
     const p = db.products.find((item: any) => item.id === id);
     if (p) {
+      const prevStock = Number(p.stock || 0);
       p.stock = Math.max(0, Number(stock) || 0);
+      let notifiedCount = 0;
+      if (prevStock <= 0 && p.stock > 0) {
+        notifiedCount = await notifyBackInStock(db, p, req);
+      }
+      syncCriticalStockNotifications(db, [p]);
       saveDatabase(db);
 
       io.emit('stock-updated', { productId: id, stock: p.stock });
       io.emit('products-updated', db.products);
 
-      res.json({ success: true, product: p });
+      res.json({ success: true, product: p, notifiedCount });
     } else {
       res.status(404).json({ success: false, error: 'Produit non trouvé' });
     }
@@ -957,7 +1484,7 @@ async function startServer() {
     res.json(db.promoCodes);
   });
 
-  app.post('/api/promos/validate', (req, res) => {
+  app.post('/api/promos/validate', (req: AuthedRequest, res) => {
     const { code, subtotal = 0 } = req.body;
     const normalized = String(code || '').trim().toUpperCase();
     if (!normalized) {
@@ -965,16 +1492,45 @@ async function startServer() {
     }
     const db = getDatabase();
     const promo = db.promoCodes.find((p: any) => p.code.toUpperCase() === normalized && p.active);
-    if (!promo) {
-      return res.status(404).json({ success: false, error: 'Code promo invalide ou expiré.' });
+    if (promo) {
+      if (Number(subtotal) < (promo.minOrder || 0)) {
+        return res.status(400).json({
+          success: false,
+          error: `Ce code nécessite un minimum d'achat de ${promo.minOrder} €.`
+        });
+      }
+      return res.json({ success: true, promo });
     }
-    if (Number(subtotal) < (promo.minOrder || 0)) {
-      return res.status(400).json({
-        success: false,
-        error: `Ce code nécessite un minimum d'achat de ${promo.minOrder} €.`
-      });
+
+    if (normalized.startsWith('MYR-')) {
+      const referrer = db.users.find((u: any) => ensureUserReferralCode(u) === normalized);
+      if (referrer) {
+        if (
+          req.authUser &&
+          (req.authUser.id === referrer.id || req.authUser.email.toLowerCase() === referrer.email.toLowerCase())
+        ) {
+          return res.status(400).json({
+            success: false,
+            error: 'Vous ne pouvez pas utiliser votre propre code de parrainage.'
+          });
+        }
+        const firstName = String(referrer.name || 'Client').split(' ')[0];
+        return res.json({
+          success: true,
+          promo: {
+            id: `ref-${referrer.id}`,
+            code: normalized,
+            discountPercent: 10,
+            minOrder: 0,
+            description: `Code parrainage de ${firstName} (-10%)`,
+            active: true,
+            isReferral: true
+          }
+        });
+      }
     }
-    res.json({ success: true, promo });
+
+    return res.status(404).json({ success: false, error: 'Code promo ou parrainage invalide.' });
   });
 
   app.post('/api/promos', requireAdmin, (req, res) => {
@@ -1045,7 +1601,7 @@ async function startServer() {
     return res.json(filtered);
   });
 
-  app.post('/api/orders', (req: AuthedRequest, res) => {
+  app.post('/api/orders', async (req: AuthedRequest, res) => {
     const ip = getClientIp(req);
     const incoming = req.body || {};
     const db = getDatabase();
@@ -1161,16 +1717,31 @@ async function startServer() {
     for (const item of normalizedItems) {
       item.product.stock = Math.max(0, item.product.stock - item.quantity);
     }
+    syncCriticalStockNotifications(db, normalizedItems.map(it => it.product));
 
     let discountAmount = 0;
     let appliedPromoCode: string | undefined;
+    let appliedReferrer: any = null;
     if (incoming.promoCode) {
+      const normalizedCode = String(incoming.promoCode).trim().toUpperCase();
       const promo = db.promoCodes.find(
-        (p: any) => p.code.toUpperCase() === String(incoming.promoCode).trim().toUpperCase() && p.active
+        (p: any) => p.code.toUpperCase() === normalizedCode && p.active
       );
       if (promo && serverSubtotal >= (promo.minOrder || 0)) {
         discountAmount = Number(((serverSubtotal * promo.discountPercent) / 100).toFixed(2));
         appliedPromoCode = promo.code;
+      } else if (normalizedCode.startsWith('MYR-')) {
+        const referrer = db.users.find((u: any) => ensureUserReferralCode(u) === normalizedCode);
+        const buyerEmailLower = String(incoming.shippingAddress?.email || req.authUser?.email || '').trim().toLowerCase();
+        if (
+          referrer &&
+          referrer.id !== req.authUser?.id &&
+          referrer.email.toLowerCase() !== buyerEmailLower
+        ) {
+          discountAmount = Number(((serverSubtotal * 10) / 100).toFixed(2));
+          appliedPromoCode = normalizedCode;
+          appliedReferrer = referrer;
+        }
       }
     }
 
@@ -1206,6 +1777,44 @@ async function startServer() {
     };
 
     db.orders.unshift(newOrder);
+
+    if (req.authUser) {
+      const buyer = db.users.find((u: any) => u.id === req.authUser!.id);
+      if (buyer) {
+        buyer.loyaltyPoints = Number(buyer.loyaltyPoints || 0) + loyaltyPointsEarned;
+      }
+    }
+
+    if (appliedReferrer) {
+      appliedReferrer.loyaltyPoints = Number(appliedReferrer.loyaltyPoints || 0) + 150;
+      appliedReferrer.referralsCount = Number(appliedReferrer.referralsCount || 0) + 1;
+      if (!Array.isArray(db.referrals)) db.referrals = [];
+      db.referrals.unshift({
+        id: `REF-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+        referrerUserId: appliedReferrer.id,
+        referrerCode: ensureUserReferralCode(appliedReferrer),
+        referredEmail: String(incoming.shippingAddress?.email || req.authUser?.email || 'client'),
+        orderId: newOrder.id,
+        rewardPoints: 150,
+        discountGranted: discountAmount,
+        createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+      });
+    }
+
+    await sendTemplatedEmail(
+      db,
+      'order_confirmed',
+      String(incoming.shippingAddress?.email || ''),
+      {
+        patientName: String(incoming.shippingAddress?.fullName || 'Client'),
+        orderId: newOrder.id,
+        totalAmount: `${newOrder.totalAmount.toFixed(2)} €`,
+        carrier: newOrder.carrier,
+        trackingNumber: newOrder.trackingNumber,
+        orderDate: newOrder.date
+      },
+      req
+    );
     saveDatabase(db);
 
     io.emit('order-created', newOrder);
@@ -1215,7 +1824,7 @@ async function startServer() {
     res.json({ success: true, order: newOrder });
   });
 
-  app.patch('/api/orders/:id/status', requireAdmin, (req, res) => {
+  app.patch('/api/orders/:id/status', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     const allowedStatuses = ['En préparation', 'Expédié', 'En cours de livraison', 'Livré'];
@@ -1225,7 +1834,25 @@ async function startServer() {
     const db = getDatabase();
     const order = db.orders.find((o: any) => o.id === id);
     if (order) {
+      const prevStatus = order.status;
       order.status = status;
+
+      if (prevStatus !== status) {
+        const orderVars = {
+          patientName: String(order.shippingAddress?.fullName || 'Client'),
+          orderId: order.id,
+          totalAmount: `${Number(order.totalAmount || 0).toFixed(2)} €`,
+          carrier: String(order.carrier || 'colissimo'),
+          trackingNumber: String(order.trackingNumber || ''),
+          loyaltyPoints: String(order.loyaltyPointsEarned || 0)
+        };
+        if (status === 'Expédié') {
+          await sendTemplatedEmail(db, 'order_shipped', String(order.shippingAddress?.email || ''), orderVars, req);
+        } else if (status === 'Livré') {
+          await sendTemplatedEmail(db, 'order_delivered', String(order.shippingAddress?.email || ''), orderVars, req);
+        }
+      }
+
       saveDatabase(db);
 
       io.emit('order-status-updated', { orderId: id, status });
@@ -1398,7 +2025,7 @@ async function startServer() {
     res.sendFile(resolvedPath);
   });
 
-  app.patch('/api/prescriptions/:id', requireAdmin, (req: AuthedRequest, res) => {
+  app.patch('/api/prescriptions/:id', requireAdmin, async (req: AuthedRequest, res) => {
     const { id } = req.params;
     const { status, pharmacistNote } = req.body;
     const allowed = ['En attente', 'Validée par le pharmacien', 'Prête en officine', 'Refusée'];
@@ -1410,8 +2037,25 @@ async function startServer() {
     if (!rx) {
       return res.status(404).json({ success: false, error: 'Ordonnance non trouvée.' });
     }
+    const prevStatus = rx.status;
     if (status) rx.status = status;
     if (pharmacistNote !== undefined) rx.pharmacistNote = String(pharmacistNote);
+
+    if (status && status !== prevStatus) {
+      const rxVars = {
+        patientName: String(rx.patientName || 'Patient'),
+        prescriptionId: rx.id,
+        prescriptionStatus: rx.status,
+        deliveryMode: rx.deliveryMode === 'click_and_collect' ? 'Retrait Click & Collect' : 'Livraison sécurisée',
+        pharmacistNote: String(rx.pharmacistNote || 'Aucune remarque particulière.')
+      };
+      if (status === 'Validée par le pharmacien' || status === 'Prête en officine') {
+        await sendTemplatedEmail(db, 'prescription_ready', String(rx.email || ''), rxVars, req);
+      } else if (status === 'Refusée') {
+        await sendTemplatedEmail(db, 'prescription_refused', String(rx.email || ''), rxVars, req);
+      }
+    }
+
     recordSecurityEvent(db, {
       category: 'admin',
       severity: 'info',
@@ -2051,6 +2695,165 @@ async function startServer() {
   });
 
   // ------------------------------------------------------------------
+  // Storefront Design & Hero Presets APIs
+  // ------------------------------------------------------------------
+  app.get('/api/design/public', (_req, res) => {
+    const db = getDatabase();
+    res.json(db.design || DEFAULT_DESIGN_CONFIG);
+  });
+
+  app.get('/api/admin/design', requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      config: db.design || DEFAULT_DESIGN_CONFIG,
+      availableHeroes: HERO_PRESET_IDS
+    });
+  });
+
+  app.put('/api/admin/design', requireAdmin, (req: AuthedRequest, res) => {
+    const db = getDatabase();
+    const body = req.body || {};
+    const current = db.design || { ...DEFAULT_DESIGN_CONFIG };
+
+    const requestedHero = String(body.activeHeroId ?? current.activeHeroId).trim();
+    if (!HERO_PRESET_IDS.includes(requestedHero as any)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Modèle Hero inconnu.'
+      });
+    }
+
+    const updated = {
+      ...current,
+      activeHeroId: requestedHero,
+      customBadge: String(body.customBadge ?? current.customBadge ?? '').trim().slice(0, 90),
+      customTitle: String(body.customTitle ?? current.customTitle ?? '').trim().slice(0, 140),
+      customSubtitle: String(body.customSubtitle ?? current.customSubtitle ?? '').trim().slice(0, 320),
+      customPrimaryCtaLabel: String(body.customPrimaryCtaLabel ?? current.customPrimaryCtaLabel ?? '').trim().slice(0, 60),
+      showTrustBar: body.showTrustBar !== undefined ? Boolean(body.showTrustBar) : current.showTrustBar !== false,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+
+    db.design = updated;
+    saveDatabase(db);
+    io.emit('design-updated', updated);
+
+    res.json({
+      success: true,
+      config: updated
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Admin Email Templates & Dispatch Logs APIs
+  // ------------------------------------------------------------------
+  app.get('/api/admin/email-templates', requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      templates: db.emailTemplates || DEFAULT_EMAIL_TEMPLATES,
+      logs: (db.emailLogs || []).slice(0, 50),
+      sampleVariables: SAMPLE_EMAIL_VARIABLES
+    });
+  });
+
+  app.put('/api/admin/email-templates/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const body = req.body || {};
+    const db = getDatabase();
+    const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES.map(t => ({ ...t }));
+    const idx = templates.findIndex((t: any) => t.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: 'Modèle email introuvable.' });
+    }
+
+    const current = templates[idx];
+    const safeColor = /^#[0-9a-fA-F]{6}$/.test(String(body.accentColor || ''))
+      ? String(body.accentColor)
+      : current.accentColor;
+    const safePath = String(body.ctaPath ?? current.ctaPath ?? '/').trim();
+    const normalizedPath = safePath.startsWith('/') ? safePath.slice(0, 120) : current.ctaPath;
+
+    const updated = {
+      ...current,
+      enabled: body.enabled !== undefined ? Boolean(body.enabled) : current.enabled,
+      subject: String(body.subject ?? current.subject).trim().slice(0, 160) || current.subject,
+      heading: String(body.heading ?? current.heading).trim().slice(0, 180) || current.heading,
+      body: String(body.body ?? current.body).trim().slice(0, 3000) || current.body,
+      ctaLabel: String(body.ctaLabel ?? current.ctaLabel).trim().slice(0, 60) || current.ctaLabel,
+      ctaPath: normalizedPath,
+      accentColor: safeColor,
+      footerNote: String(body.footerNote ?? current.footerNote).trim().slice(0, 300),
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+
+    templates[idx] = updated;
+    db.emailTemplates = templates;
+    saveDatabase(db);
+    res.json({ success: true, template: updated });
+  });
+
+  app.post('/api/admin/email-templates/:id/reset', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const defTpl = DEFAULT_EMAIL_TEMPLATES.find(t => t.id === id);
+    if (!defTpl) {
+      return res.status(404).json({ success: false, error: 'Modèle email introuvable.' });
+    }
+    const db = getDatabase();
+    const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES.map(t => ({ ...t }));
+    const idx = templates.findIndex((t: any) => t.id === id);
+    const resetTpl = { ...defTpl, updatedAt: new Date().toISOString().split('T')[0] };
+    if (idx === -1) templates.push(resetTpl);
+    else templates[idx] = resetTpl;
+    db.emailTemplates = templates;
+    saveDatabase(db);
+    res.json({ success: true, template: resetTpl });
+  });
+
+  app.post('/api/admin/email-templates/:id/test', requireAdmin, async (req: AuthedRequest, res) => {
+    const { id } = req.params;
+    const { to, draft } = req.body || {};
+    const db = getDatabase();
+    const baseTpl = (db.emailTemplates || DEFAULT_EMAIL_TEMPLATES).find((t: any) => t.id === id);
+    if (!baseTpl) {
+      return res.status(404).json({ success: false, error: 'Modèle email introuvable.' });
+    }
+
+    const recipient = String(to || req.authUser?.email || '').trim();
+    if (!recipient || !recipient.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Adresse email de test invalide.' });
+    }
+
+    const overrideTemplate = draft && typeof draft === 'object'
+      ? {
+          ...baseTpl,
+          subject: String(draft.subject ?? baseTpl.subject).slice(0, 160),
+          heading: String(draft.heading ?? baseTpl.heading).slice(0, 180),
+          body: String(draft.body ?? baseTpl.body).slice(0, 3000),
+          ctaLabel: String(draft.ctaLabel ?? baseTpl.ctaLabel).slice(0, 60),
+          ctaPath: String(draft.ctaPath ?? baseTpl.ctaPath).startsWith('/') ? String(draft.ctaPath) : baseTpl.ctaPath,
+          accentColor: /^#[0-9a-fA-F]{6}$/.test(String(draft.accentColor || '')) ? draft.accentColor : baseTpl.accentColor,
+          footerNote: String(draft.footerNote ?? baseTpl.footerNote).slice(0, 300)
+        }
+      : undefined;
+
+    const result = await sendTemplatedEmail(
+      db,
+      id,
+      recipient,
+      SAMPLE_EMAIL_VARIABLES,
+      req,
+      overrideTemplate
+    );
+    saveDatabase(db);
+
+    res.json({
+      success: true,
+      logEntry: result?.logEntry,
+      logs: (db.emailLogs || []).slice(0, 50)
+    });
+  });
+
+  // ------------------------------------------------------------------
   // Admin Webmaster & SEO Management APIs
   // ------------------------------------------------------------------
   app.get('/api/admin/webmaster', requireAdmin, (req, res) => {
@@ -2346,7 +3149,7 @@ async function startServer() {
     res.json(list);
   });
 
-  app.post('/api/appointments', (req: AuthedRequest, res) => {
+  app.post('/api/appointments', async (req: AuthedRequest, res) => {
     const ip = getClientIp(req);
     const { serviceType, format, date, timeSlot, patientName, patientEmail, patientPhone, notes, website } = req.body || {};
     if (website && String(website).trim().length > 0) {
@@ -2431,13 +3234,27 @@ async function startServer() {
     };
 
     db.appointments.unshift(appointment);
+    await sendTemplatedEmail(
+      db,
+      'appointment_confirmed',
+      appointment.patientEmail,
+      {
+        patientName: appointment.patientName,
+        appointmentId: appointment.id,
+        serviceLabel: appointment.serviceLabel,
+        appointmentDate: appointment.date,
+        appointmentSlot: appointment.timeSlot,
+        appointmentFormat: appointment.format === 'visio' ? 'Téléconseil visio' : 'À l’officine'
+      },
+      req
+    );
     saveDatabase(db);
     io.emit('appointments-updated', db.appointments);
 
     res.json({ success: true, appointment });
   });
 
-  app.patch('/api/appointments/:id/cancel', requireAuth, (req: AuthedRequest, res) => {
+  app.patch('/api/appointments/:id/cancel', requireAuth, async (req: AuthedRequest, res) => {
     const { id } = req.params;
     const db = getDatabase();
     const appt = (db.appointments || []).find((a: any) => a.id === id);
@@ -2451,7 +3268,25 @@ async function startServer() {
     if (!isOwner) {
       return res.status(403).json({ success: false, error: 'Accès non autorisé.' });
     }
+    const prevStatus = appt.status;
     appt.status = 'Annulé';
+    if (prevStatus !== 'Annulé') {
+      await sendTemplatedEmail(
+        db,
+        'appointment_cancelled',
+        String(appt.patientEmail || ''),
+        {
+          patientName: String(appt.patientName || 'Patient'),
+          appointmentId: appt.id,
+          serviceLabel: String(appt.serviceLabel || ''),
+          appointmentDate: String(appt.date || ''),
+          appointmentSlot: String(appt.timeSlot || ''),
+          appointmentFormat: appt.format === 'visio' ? 'Téléconseil visio' : 'À l’officine',
+          pharmacistNote: String(appt.pharmacistNote || 'Annulé depuis l’espace patient.')
+        },
+        req
+      );
+    }
     saveDatabase(db);
     io.emit('appointments-updated', db.appointments);
     res.json({ success: true, appointment: appt });
@@ -2462,7 +3297,7 @@ async function startServer() {
     res.json(db.appointments || []);
   });
 
-  app.patch('/api/admin/appointments/:id', requireAdmin, (req, res) => {
+  app.patch('/api/admin/appointments/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status, pharmacistNote } = req.body || {};
     const allowedStatuses = ['Confirmé', 'Terminé', 'Annulé'];
@@ -2471,6 +3306,7 @@ async function startServer() {
     if (!appt) {
       return res.status(404).json({ success: false, error: 'Rendez-vous introuvable.' });
     }
+    const prevStatus = appt.status;
     if (status !== undefined) {
       if (!allowedStatuses.includes(status)) {
         return res.status(400).json({ success: false, error: 'Statut invalide.' });
@@ -2480,6 +3316,26 @@ async function startServer() {
     if (pharmacistNote !== undefined) {
       appt.pharmacistNote = String(pharmacistNote).trim().slice(0, 500);
     }
+
+    if (status !== undefined && status !== prevStatus) {
+      const apptVars = {
+        patientName: String(appt.patientName || 'Patient'),
+        appointmentId: appt.id,
+        serviceLabel: String(appt.serviceLabel || ''),
+        appointmentDate: String(appt.date || ''),
+        appointmentSlot: String(appt.timeSlot || ''),
+        appointmentFormat: appt.format === 'visio' ? 'Téléconseil visio' : 'À l’officine',
+        pharmacistNote: String(appt.pharmacistNote || 'Aucune remarque complémentaire.')
+      };
+      if (status === 'Confirmé') {
+        await sendTemplatedEmail(db, 'appointment_confirmed', String(appt.patientEmail || ''), apptVars, req);
+      } else if (status === 'Terminé') {
+        await sendTemplatedEmail(db, 'appointment_completed', String(appt.patientEmail || ''), apptVars, req);
+      } else if (status === 'Annulé') {
+        await sendTemplatedEmail(db, 'appointment_cancelled', String(appt.patientEmail || ''), apptVars, req);
+      }
+    }
+
     saveDatabase(db);
     io.emit('appointments-updated', db.appointments);
     res.json({ success: true, appointment: appt });
@@ -2641,6 +3497,518 @@ Policy: ${baseUrl}/confidentialite
     });
     saveDatabase(db);
     res.json({ success: true, config: cfg });
+  });
+
+  // ------------------------------------------------------------------
+  // Back-in-Stock Alerts, Newsletter & CRM Campaign APIs
+  // ------------------------------------------------------------------
+  app.post('/api/stock-alerts', (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`stock-alert:${ip}`, 'stock_alert', ip, 15, 15 * 60 * 1000, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({ success: false, error: 'Trop de demandes récentes. Patienter quelques minutes.' });
+    }
+
+    const { productId, email } = req.body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'Veuillez saisir une adresse email valide.' });
+    }
+
+    const db = getDatabase();
+    const product = db.products.find((p: any) => p.id === productId);
+    if (!product) {
+      return res.status(404).json({ success: false, error: 'Produit introuvable.' });
+    }
+    if (Number(product.stock || 0) > 0) {
+      return res.status(400).json({ success: false, error: 'Ce produit est actuellement en stock et disponible à la commande.' });
+    }
+
+    if (!Array.isArray(db.stockAlerts)) db.stockAlerts = [];
+    const existing = db.stockAlerts.find(
+      (a: any) => a.productId === product.id && a.email.toLowerCase() === cleanEmail && a.status === 'En attente'
+    );
+    if (existing) {
+      return res.json({ success: true, alreadySubscribed: true, alert: existing });
+    }
+
+    const alert = {
+      id: `STK-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+      productId: product.id,
+      productName: product.name,
+      email: cleanEmail,
+      status: 'En attente' as const,
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+    };
+    db.stockAlerts.unshift(alert);
+    saveDatabase(db);
+    res.json({ success: true, alreadySubscribed: false, alert });
+  });
+
+  app.post('/api/newsletter/subscribe', (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`newsletter:${ip}`, 'newsletter', ip, 12, 15 * 60 * 1000, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({ success: false, error: 'Trop de tentatives récentes. Réessayez plus tard.' });
+    }
+
+    const { email, name = '', source = 'footer' } = req.body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'Adresse email invalide.' });
+    }
+
+    const db = getDatabase();
+    if (!Array.isArray(db.newsletterSubscribers)) db.newsletterSubscribers = [];
+    const existing = db.newsletterSubscribers.find((s: any) => s.email.toLowerCase() === cleanEmail);
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    if (existing && existing.status === 'Actif') {
+      return res.json({
+        success: true,
+        alreadySubscribed: true,
+        subscriber: existing,
+        promoCode: 'BIENVENUE10'
+      });
+    }
+
+    if (existing) {
+      existing.status = 'Actif';
+      existing.subscribedAt = nowStr;
+      if (name) existing.name = String(name).trim().slice(0, 80);
+      saveDatabase(db);
+      return res.json({ success: true, alreadySubscribed: false, subscriber: existing, promoCode: 'BIENVENUE10' });
+    }
+
+    const subscriber = {
+      id: `NWS-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+      email: cleanEmail,
+      name: String(name || '').trim().slice(0, 80) || undefined,
+      source: String(source || 'footer').slice(0, 40),
+      status: 'Actif' as const,
+      subscribedAt: nowStr
+    };
+    db.newsletterSubscribers.unshift(subscriber);
+    saveDatabase(db);
+    res.json({ success: true, alreadySubscribed: false, subscriber, promoCode: 'BIENVENUE10' });
+  });
+
+  app.post('/api/newsletter/unsubscribe', (req, res) => {
+    const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return res.status(400).json({ success: false, error: 'Adresse email requise.' });
+    }
+    const db = getDatabase();
+    const sub = (db.newsletterSubscribers || []).find((s: any) => s.email.toLowerCase() === cleanEmail);
+    if (sub) {
+      sub.status = 'Désabonné';
+      saveDatabase(db);
+    }
+    res.json({ success: true });
+  });
+
+  app.get('/api/account/referral', requireAuth, (req: AuthedRequest, res) => {
+    const db = getDatabase();
+    const user = db.users.find((u: any) => u.id === req.authUser!.id);
+    if (!user) return res.status(404).json({ success: false, error: 'Utilisateur introuvable.' });
+
+    const code = ensureUserReferralCode(user);
+    const userReferrals = (db.referrals || []).filter((r: any) => r.referrerUserId === user.id);
+    saveDatabase(db);
+
+    res.json({
+      referralCode: code,
+      loyaltyPoints: Number(user.loyaltyPoints || 0),
+      referralsCount: Number(user.referralsCount || userReferrals.length),
+      rewardPerReferral: 150,
+      friendDiscountPercent: 10,
+      referrals: userReferrals
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Product Reviews with Verified Purchase Badge
+  // ------------------------------------------------------------------
+  app.get('/api/reviews/:productId', (req, res) => {
+    const productId = String(req.params.productId || '');
+    const db = getDatabase();
+    const list = (db.reviews || []).filter((r: any) => r.productId === productId);
+    res.json(list);
+  });
+
+  app.post('/api/reviews/:productId', (req: AuthedRequest, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`reviews:${ip}`, 'reviews', ip, 10, 15 * 60 * 1000, 15 * 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({ success: false, error: 'Trop d’avis envoyés récemment. Patienter quelques minutes.' });
+    }
+
+    const productId = String(req.params.productId || '');
+    const { rating, author, comment, email } = req.body || {};
+    const numRating = Math.max(1, Math.min(5, Math.round(Number(rating) || 5)));
+    const cleanAuthor = String(author || req.authUser?.email?.split('@')[0] || '').trim().slice(0, 80);
+    const cleanComment = String(comment || '').trim().slice(0, 1000);
+    const cleanEmail = String(email || req.authUser?.email || '').trim().toLowerCase();
+
+    if (!cleanAuthor || !cleanComment) {
+      return res.status(400).json({ success: false, error: 'Nom et commentaire requis.' });
+    }
+
+    const db = getDatabase();
+    const product = db.products.find((p: any) => p.id === productId);
+    if (!product) {
+      return res.status(404).json({ success: false, error: 'Produit introuvable.' });
+    }
+
+    const verifiedPurchase = (db.orders || []).some((o: any) => {
+      const hasItem = Array.isArray(o.items) && o.items.some((it: any) => it.product?.id === productId);
+      if (!hasItem) return false;
+      if (req.authUser && (o.userId === req.authUser.id || o.shippingAddress?.email?.toLowerCase() === req.authUser.email.toLowerCase())) {
+        return true;
+      }
+      if (cleanEmail && o.shippingAddress?.email?.toLowerCase() === cleanEmail) {
+        return true;
+      }
+      return false;
+    });
+
+    const newReview = {
+      id: `REV-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+      productId,
+      author: cleanAuthor,
+      rating: numRating,
+      comment: cleanComment,
+      date: new Date().toISOString().split('T')[0],
+      verifiedPurchase
+    };
+
+    if (!Array.isArray(db.reviews)) db.reviews = [];
+    db.reviews.unshift(newReview);
+
+    const prevCount = Math.max(0, Number(product.reviewsCount) || 0);
+    const prevRating = Number(product.rating) || 5;
+    const nextCount = prevCount + 1;
+    product.reviewsCount = nextCount;
+    product.rating = Number((((prevRating * prevCount) + numRating) / nextCount).toFixed(1));
+
+    saveDatabase(db);
+    io.emit('products-updated', db.products);
+    res.json({ success: true, review: newReview, product });
+  });
+
+  // ------------------------------------------------------------------
+  // Admin CRM, Newsletter Subscribers & Campaigns
+  // ------------------------------------------------------------------
+  app.get('/api/admin/crm', requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      subscribers: db.newsletterSubscribers || [],
+      stockAlerts: db.stockAlerts || [],
+      campaigns: db.emailCampaigns || [],
+      referrals: db.referrals || []
+    });
+  });
+
+  app.delete('/api/admin/crm/subscribers/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    db.newsletterSubscribers = (db.newsletterSubscribers || []).filter((s: any) => s.id !== id);
+    saveDatabase(db);
+    res.json({ success: true });
+  });
+
+  app.post('/api/admin/crm/campaigns', requireAdmin, async (req, res) => {
+    const { subject, heading, body, ctaLabel = 'Découvrir les offres', ctaPath = '/', accentColor = '#1d4ed8' } = req.body || {};
+    const cleanSubject = String(subject || '').trim().slice(0, 160);
+    const cleanHeading = String(heading || cleanSubject).trim().slice(0, 180);
+    const cleanBody = String(body || '').trim().slice(0, 3000);
+    if (!cleanSubject || !cleanBody) {
+      return res.status(400).json({ success: false, error: 'Objet et message de la campagne requis.' });
+    }
+
+    const db = getDatabase();
+    const activeSubs = (db.newsletterSubscribers || []).filter((s: any) => s.status === 'Actif');
+    if (activeSubs.length === 0) {
+      return res.status(400).json({ success: false, error: 'Aucun abonné actif dans la liste Newsletter.' });
+    }
+
+    const safeColor = /^#[0-9a-fA-F]{6}$/.test(String(accentColor || '')) ? String(accentColor) : '#1d4ed8';
+    const safePath = String(ctaPath || '/').startsWith('/') ? String(ctaPath).slice(0, 120) : '/';
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+    const campaignTpl = {
+      id: 'newsletter_campaign',
+      name: `Campagne : ${cleanSubject.slice(0, 42)}`,
+      statusLabel: 'Newsletter Officinale',
+      subject: cleanSubject,
+      heading: cleanHeading,
+      body: cleanBody,
+      ctaLabel: String(ctaLabel || 'Découvrir').trim().slice(0, 60),
+      ctaPath: safePath,
+      accentColor: safeColor,
+      footerNote: 'Vous recevez ce message suite à votre inscription à la newsletter Myrlan Parapharmacie.',
+      enabled: true
+    };
+
+    for (const sub of activeSubs) {
+      const rendered = renderEmailTemplate(campaignTpl, { patientName: sub.name || 'Client(e)' }, baseUrl);
+      let dispatchStatus: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur' = hasAuth ? 'Envoyé (SMTP)' : 'Mode Aperçu';
+      try {
+        await smtpTransporter.sendMail({
+          from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
+          to: sub.email,
+          subject: rendered.subject,
+          text: rendered.text,
+          html: rendered.html
+        });
+      } catch {
+        dispatchStatus = hasAuth ? 'Erreur' : 'Mode Aperçu';
+      }
+      db.emailLogs = [
+        {
+          id: `EML-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+          templateId: 'newsletter_campaign',
+          templateName: campaignTpl.name,
+          to: sub.email,
+          subject: rendered.subject,
+          status: dispatchStatus,
+          sentAt: nowStr
+        },
+        ...(Array.isArray(db.emailLogs) ? db.emailLogs : [])
+      ].slice(0, 80);
+    }
+
+    const campaign = {
+      id: `CMP-${Date.now().toString(36)}`,
+      subject: cleanSubject,
+      heading: cleanHeading,
+      recipientCount: activeSubs.length,
+      sentAt: nowStr,
+      status: hasAuth ? ('Envoyée (SMTP)' as const) : ('Mode Aperçu' as const)
+    };
+    if (!Array.isArray(db.emailCampaigns)) db.emailCampaigns = [];
+    db.emailCampaigns.unshift(campaign);
+    saveDatabase(db);
+
+    res.json({ success: true, campaign, recipientCount: activeSubs.length });
+  });
+
+  // ------------------------------------------------------------------
+  // Admin Automatic Critical Stock Notifications & Restock Email APIs
+  // ------------------------------------------------------------------
+  app.get('/api/admin/restock', requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    syncCriticalStockNotifications(db, db.products);
+    saveDatabase(db);
+
+    const cfg = db.restockConfig || { ...DEFAULT_RESTOCK_CONFIG };
+    const threshold = Math.max(1, Number(cfg.criticalThreshold || 5));
+    const criticalProducts = (db.products || [])
+      .filter((p: any) => Number(p.stock || 0) <= threshold)
+      .sort((a: any, b: any) => Number(a.stock || 0) - Number(b.stock || 0));
+
+    res.json({
+      config: cfg,
+      criticalProducts,
+      notifications: db.restockNotifications || [],
+      restockEmails: (db.restockEmails || []).slice(0, 40)
+    });
+  });
+
+  app.put('/api/admin/restock/config', requireAdmin, (req: AuthedRequest, res) => {
+    const db = getDatabase();
+    const current = db.restockConfig || { ...DEFAULT_RESTOCK_CONFIG };
+    const body = req.body || {};
+
+    const nextThreshold = body.criticalThreshold !== undefined
+      ? Math.max(1, Math.min(100, Math.round(Number(body.criticalThreshold) || 5)))
+      : current.criticalThreshold;
+    const nextTarget = body.targetStock !== undefined
+      ? Math.max(nextThreshold + 1, Math.min(500, Math.round(Number(body.targetStock) || 25)))
+      : Math.max(nextThreshold + 1, Number(current.targetStock || 25));
+
+    const cleanEmail = body.supplierEmail !== undefined
+      ? String(body.supplierEmail).trim().slice(0, 140)
+      : current.supplierEmail;
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'Adresse email fournisseur invalide.' });
+    }
+
+    const updated = {
+      criticalThreshold: nextThreshold,
+      targetStock: nextTarget,
+      supplierEmail: cleanEmail || DEFAULT_RESTOCK_CONFIG.supplierEmail,
+      supplierName: String(body.supplierName ?? current.supplierName ?? DEFAULT_RESTOCK_CONFIG.supplierName).trim().slice(0, 100),
+      autoNotifyOnOrder: body.autoNotifyOnOrder !== undefined ? Boolean(body.autoNotifyOnOrder) : current.autoNotifyOnOrder !== false,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+
+    db.restockConfig = updated;
+    // Rebuild active notifications cleanly against the updated critical threshold
+    db.restockNotifications = [];
+    syncCriticalStockNotifications(db, db.products);
+    saveDatabase(db);
+
+    io.emit('restock-config-updated', updated);
+    res.json({
+      success: true,
+      config: updated,
+      notifications: db.restockNotifications
+    });
+  });
+
+  app.post('/api/admin/restock/acknowledge', requireAdmin, (req, res) => {
+    const { notificationId, all } = req.body || {};
+    const db = getDatabase();
+    if (!Array.isArray(db.restockNotifications)) db.restockNotifications = [];
+    if (all) {
+      db.restockNotifications.forEach((n: any) => { n.acknowledged = true; });
+    } else if (notificationId) {
+      const target = db.restockNotifications.find((n: any) => n.id === notificationId);
+      if (target) target.acknowledged = true;
+    }
+    saveDatabase(db);
+    io.emit('restock-notifications-updated', db.restockNotifications);
+    res.json({ success: true, notifications: db.restockNotifications });
+  });
+
+  app.post('/api/admin/restock/send-email', requireAdmin, async (req: AuthedRequest, res) => {
+    const { to, supplierName, subject, body, items } = req.body || {};
+    const cleanTo = String(to || '').trim();
+    const cleanSubject = String(subject || '').trim().slice(0, 180);
+    const cleanBody = String(body || '').trim().slice(0, 6000);
+    const cleanSupplier = String(supplierName || 'Grossiste Répartiteur').trim().slice(0, 100);
+
+    if (!cleanTo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanTo)) {
+      return res.status(400).json({ success: false, error: 'Adresse email destinataire invalide.' });
+    }
+    if (!cleanSubject || !cleanBody) {
+      return res.status(400).json({ success: false, error: 'Objet et contenu du mail requis.' });
+    }
+
+    const normalizedLines = Array.isArray(items)
+      ? items
+          .filter((it: any) => it && it.productId)
+          .map((it: any) => ({
+            productId: String(it.productId),
+            name: String(it.name || '').slice(0, 140),
+            brand: String(it.brand || '').slice(0, 80),
+            ean: String(it.ean || '').slice(0, 32),
+            currentStock: Math.max(0, Number(it.currentStock) || 0),
+            orderQty: Math.max(1, Math.min(1000, Math.round(Number(it.orderQty) || 1))),
+            unitPrice: Math.max(0, Number(it.unitPrice) || 0)
+          }))
+      : [];
+
+    const tableRowsHtml = normalizedLines
+      .map(
+        line => `<tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;">${escapeHtmlForEmail(line.name)}<div style="font-size:11px;font-weight:400;color:#64748b;">${escapeHtmlForEmail(line.brand)} · EAN ${escapeHtmlForEmail(line.ean)}</div></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace;color:#b45309;">${line.currentStock} u.</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace;font-weight:700;color:#0f172a;">+${line.orderQty} u.</td>
+        </tr>`
+      )
+      .join('');
+
+    const bodyParagraphsHtml = escapeHtmlForEmail(cleanBody)
+      .split(/\n{2,}/)
+      .map(p => `<p style="margin:0 0 12px 0;color:#334155;font-size:13px;line-height:1.6;">${p.replace(/\n/g, '<br/>')}</p>`)
+      .join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8" /><title>${escapeHtmlForEmail(cleanSubject)}</title></head>
+<body style="margin:0;padding:24px 12px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+    <tr>
+      <td style="background:#0f172a;padding:18px 24px;color:#ffffff;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#93c5fd;">Myrlan Officine · Bon de Réapprovisionnement</div>
+        <div style="font-size:18px;font-weight:800;margin-top:4px;">${escapeHtmlForEmail(cleanSubject)}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:22px 24px;">
+        ${bodyParagraphsHtml}
+        ${normalizedLines.length > 0 ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:#f8fafc;color:#475569;text-align:left;">
+              <th style="padding:8px 10px;border-bottom:1px solid #e2e8f0;">Référence / EAN</th>
+              <th style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">Stock actuel</th>
+              <th style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">Qté commandée</th>
+            </tr>
+          </thead>
+          <tbody>${tableRowsHtml}</tbody>
+        </table>` : ''}
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:14px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#64748b;font-size:11px;">
+        Myrlan Parapharmacie — 15 rue de la République, 69002 Lyon · Émis par ${escapeHtmlForEmail(req.authUser?.email || 'Pharmacien')}
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    let dispatchStatus: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur' = hasAuth ? 'Envoyé (SMTP)' : 'Mode Aperçu';
+    try {
+      await smtpTransporter.sendMail({
+        from: '"Myrlan Officine — Achats" <achats@myrlan.fr>',
+        to: cleanTo,
+        subject: cleanSubject,
+        text: cleanBody,
+        html
+      });
+    } catch {
+      dispatchStatus = hasAuth ? 'Erreur' : 'Mode Aperçu';
+    }
+
+    const db = getDatabase();
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const totalUnits = normalizedLines.reduce((sum, l) => sum + l.orderQty, 0);
+
+    const record = {
+      id: `RSM-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+      to: cleanTo,
+      supplierName: cleanSupplier,
+      subject: cleanSubject,
+      itemsCount: normalizedLines.length,
+      totalUnits,
+      items: normalizedLines,
+      status: dispatchStatus,
+      sentAt: nowStr,
+      actor: req.authUser?.email || 'Admin'
+    };
+
+    if (!Array.isArray(db.restockEmails)) db.restockEmails = [];
+    db.restockEmails.unshift(record);
+    db.restockEmails = db.restockEmails.slice(0, 50);
+
+    db.emailLogs = [
+      {
+        id: `EML-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+        templateId: 'supplier_restock',
+        templateName: `Réapprovisionnement (${normalizedLines.length} réf.)`,
+        to: cleanTo,
+        subject: cleanSubject,
+        status: dispatchStatus,
+        sentAt: nowStr
+      },
+      ...(Array.isArray(db.emailLogs) ? db.emailLogs : [])
+    ].slice(0, 80);
+
+    // Acknowledge matching critical notifications since restock email was sent
+    const orderedIds = new Set(normalizedLines.map(l => l.productId));
+    if (Array.isArray(db.restockNotifications)) {
+      db.restockNotifications.forEach((n: any) => {
+        if (orderedIds.has(n.productId)) n.acknowledged = true;
+      });
+    }
+
+    saveDatabase(db);
+    io.emit('restock-notifications-updated', db.restockNotifications || []);
+    res.json({ success: true, record, notifications: db.restockNotifications || [] });
   });
 
   // Server-side 301/302 Redirect Middleware for storefront URLs

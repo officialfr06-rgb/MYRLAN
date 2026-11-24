@@ -1,8 +1,9 @@
 import React from 'react';
 import {
-  CheckCircle, Printer, ArrowLeft, ShieldCheck, Package, Building, Award
+  CheckCircle, Printer, ArrowLeft, ShieldCheck, Package, Building, Award, Download
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { downloadOrderInvoicePdf } from '../utils/invoicePdf';
 
 export const OrderConfirmationPage: React.FC<{ orderId: string }> = ({ orderId }) => {
   const { myOrders, orders, navigate } = useShop();
@@ -44,12 +45,22 @@ export const OrderConfirmationPage: React.FC<{ orderId: string }> = ({ orderId }
         >
           <ArrowLeft className="w-4 h-4" /> Mes commandes
         </button>
-        <button
-          onClick={() => window.print()}
-          className="px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs rounded-xl inline-flex items-center gap-2 shadow-sm"
-        >
-          <Printer className="w-4 h-4" /> Imprimer / Télécharger en PDF
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => downloadOrderInvoicePdf(order)}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl inline-flex items-center gap-2 shadow-sm"
+          >
+            <Download className="w-4 h-4" /> Télécharger PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-4 py-2.5 bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs rounded-xl inline-flex items-center gap-2 shadow-sm"
+          >
+            <Printer className="w-4 h-4" /> Imprimer
+          </button>
+        </div>
       </div>
 
       {/* Confirmation Banner */}

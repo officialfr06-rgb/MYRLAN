@@ -99,7 +99,7 @@ export const CartDrawer: React.FC = () => {
         </div>
 
         {/* Cart Items List */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4">
           {cart.length === 0 ? (
             <div className="text-center py-20 space-y-4">
               <div className="w-20 h-20 mx-auto rounded-full bg-blue-50 flex items-center justify-center text-blue-600">

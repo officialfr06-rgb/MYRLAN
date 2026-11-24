@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, Star, ShoppingBag, Heart, ShieldCheck, CheckCircle,
   AlertTriangle, Share2, Truck, MessageSquare, Sparkles,
-  FlaskConical, Leaf, Microscope, Barcode, Package, Layers, Droplet, Calendar
+  FlaskConical, Leaf, Microscope, Barcode, Package, Layers, Droplet, Calendar, Scale, BellRing
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
-import { Product } from '../types';
+import { Product, Review } from '../types';
 import { AddReviewModal } from './AddReviewModal';
 import { analyzeProductSafety } from '../utils/pharmacySafety';
 
@@ -15,13 +15,59 @@ interface ProductPageProps {
 }
 
 export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => {
-  const { addToCart, wishlist, toggleWishlist, products, setSelectedProductForDetail, showToast, navigate } = useShop();
+  const {
+    addToCart, wishlist, toggleWishlist, products, setSelectedProductForDetail,
+    showToast, navigate, compareList, toggleCompare, setIsCompareOpen, currentUser
+  } = useShop();
   const [quantity, setQuantity] = useState(1);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [alertEmail, setAlertEmail] = useState(currentUser?.email || '');
+  const [isAlertSubmitting, setIsAlertSubmitting] = useState(false);
+  const [alertConfirmed, setAlertConfirmed] = useState(false);
+
+  useEffect(() => {
+    setAlertConfirmed(false);
+    fetch(`/api/reviews/${encodeURIComponent(product.id)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setReviews(data);
+      })
+      .catch(() => {});
+  }, [product.id]);
+
+  const handleStockAlertSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!alertEmail.trim() || isAlertSubmitting) return;
+    setIsAlertSubmitting(true);
+    try {
+      const res = await fetch('/api/stock-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.id, email: alertEmail.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAlertConfirmed(true);
+        showToast(
+          data.alreadySubscribed
+            ? 'Votre alerte retour en stock est déjà active pour ce produit.'
+            : 'Alerte enregistrée ! Vous serez prévenu par email dès le réapprovisionnement.'
+        );
+      } else {
+        showToast(data.error || 'Impossible d’enregistrer cette alerte.');
+      }
+    } catch {
+      showToast('Erreur de connexion au serveur.');
+    } finally {
+      setIsAlertSubmitting(false);
+    }
+  };
 
   const safetySummary = useMemo(() => analyzeProductSafety(product, 'standard'), [product]);
 
   const isWishlisted = wishlist.includes(product.id);
+  const isCompared = compareList.includes(product.id);
   const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 3);
 
   const handleShare = () => {
@@ -49,13 +95,40 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
           <span className="text-gray-900 font-bold">{product.name}</span>
         </div>
 
-        <button
-          onClick={() => toggleWishlist(product.id)}
-          className={`p-2.5 rounded-xl border transition-all shrink-0 ${isWishlisted ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'}`}
-          title="Ajouter aux favoris"
-        >
-          <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-current' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => toggleCompare(product.id)}
+            aria-pressed={isCompared}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all whitespace-nowrap ${
+              isCompared
+                ? 'bg-slate-900 text-white border-slate-900'
+                : 'bg-white text-slate-700 border-gray-200 hover:bg-gray-100'
+            }`}
+            title={isCompared ? 'Retirer du comparateur' : 'Ajouter au comparateur'}
+          >
+            <Scale className="w-4 h-4" />
+            <span>{isCompared ? 'Comparé' : 'Comparer'}</span>
+          </button>
+
+          {compareList.length >= 2 && (
+            <button
+              type="button"
+              onClick={() => setIsCompareOpen(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-xs font-bold transition-colors whitespace-nowrap tabular-nums"
+            >
+              Voir ({compareList.length})
+            </button>
+          )}
+
+          <button
+            onClick={() => toggleWishlist(product.id)}
+            className={`p-2.5 rounded-xl border transition-all shrink-0 ${isWishlisted ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+            title="Ajouter aux favoris"
+          >
+            <Heart className={`w-4 h-4 ${isWishlisted ? 'fill-current' : ''}`} />
+          </button>
+        </div>
       </div>
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 space-y-10 sm:space-y-14">
@@ -196,6 +269,39 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
                   <span>Paiement sécurisé SSL</span>
                 </div>
               </div>
+
+              {product.stock <= 0 && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
+                    <BellRing className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>M’avertir dès le retour en stock</span>
+                  </div>
+                  {alertConfirmed ? (
+                    <div className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                      <span>Vous recevrez un email prioritaire dès le réapprovisionnement officinal.</span>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleStockAlertSubmit} className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="email"
+                        required
+                        value={alertEmail}
+                        onChange={(e) => setAlertEmail(e.target.value)}
+                        placeholder="Votre email..."
+                        className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isAlertSubmitting}
+                        className="px-4 py-2 bg-slate-900 hover:bg-blue-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl whitespace-nowrap"
+                      >
+                        {isAlertSubmitting ? 'Envoi...' : 'Créer l’alerte'}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -325,6 +431,25 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {reviews.map(rev => (
+              <div key={rev.id} className="p-5 rounded-2xl bg-white border border-gray-200 space-y-2">
+                <div className="flex justify-between items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-xs text-gray-900">{rev.author}</span>
+                    {rev.verifiedPurchase && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                        <CheckCircle className="w-3 h-3" /> Achat vérifié
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-amber-400 text-sm shrink-0">
+                    {'★'.repeat(rev.rating)}{'☆'.repeat(Math.max(0, 5 - rev.rating))}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-700 leading-relaxed">&ldquo;{rev.comment}&rdquo;</p>
+                <div className="text-[10px] text-gray-400 tabular-nums">Publié le {rev.date}</div>
+              </div>
+            ))}
             <div className="p-5 rounded-2xl bg-white border border-gray-200 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-xs text-gray-900">Dr. Hélène B. (Professionnel de santé)</span>
@@ -333,8 +458,13 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
               <p className="text-xs text-gray-700 leading-relaxed">"Je recommande régulièrement ce produit à mes patients dans le cadre de leur routine quotidienne. Excellente tolérance et résultats visibles."</p>
             </div>
             <div className="p-5 rounded-2xl bg-white border border-gray-200 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-xs text-gray-900">Marc V. (Achat vérifié)</span>
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs text-gray-900">Marc V.</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                    <CheckCircle className="w-3 h-3" /> Achat vérifié
+                  </span>
+                </div>
                 <span className="text-amber-400 text-sm">★★★★★</span>
               </div>
               <p className="text-xs text-gray-700 leading-relaxed">"Colis reçu en 24h, emballage irréprochable. Le produit correspond exactement à mes attentes."</p>
@@ -371,7 +501,11 @@ export const ProductPage: React.FC<ProductPageProps> = ({ product, onBack }) => 
         )}
 
         {isReviewModalOpen && (
-          <AddReviewModal product={product} onClose={() => setIsReviewModalOpen(false)} />
+          <AddReviewModal
+            product={product}
+            onClose={() => setIsReviewModalOpen(false)}
+            onReviewAdded={(newRev) => setReviews(prev => [newRev, ...prev])}
+          />
         )}
       </div>
     </div>

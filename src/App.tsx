@@ -18,6 +18,9 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
 import { SeoHeadManager } from './components/SeoHeadManager';
+import { CompareBar } from './components/CompareBar';
+import { CompareModal } from './components/CompareModal';
+import { useBodyScrollLock } from './utils/scrollLock';
 
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PrescriptionPage } from './pages/PrescriptionPage';
@@ -32,7 +35,37 @@ import { DiagnosticPage } from './pages/DiagnosticPage';
 import { AppointmentsPage } from './pages/AppointmentsPage';
 
 const StoreContent: React.FC = () => {
-  const { currentPath, selectedProductForDetail, navigate } = useShop();
+  const {
+    currentPath,
+    selectedProductForDetail,
+    navigate,
+    isCartOpen,
+    isCheckoutOpen,
+    isAiAdvisorOpen,
+    isLoyaltyOpen,
+    isChatOpen,
+    isOrderTrackingOpen,
+    isWishlistOpen,
+    isFaqOpen,
+    isLegalOpen,
+    isAccountOpen,
+    isCompareOpen
+  } = useShop();
+
+  const hasOpenOverlay =
+    isCartOpen ||
+    isCheckoutOpen ||
+    isAiAdvisorOpen ||
+    isLoyaltyOpen ||
+    isChatOpen ||
+    isOrderTrackingOpen ||
+    isWishlistOpen ||
+    isFaqOpen ||
+    isLegalOpen ||
+    isAccountOpen ||
+    isCompareOpen;
+
+  useBodyScrollLock(hasOpenOverlay);
 
   if (currentPath === '/admin') {
     return (
@@ -128,6 +161,8 @@ const StoreContent: React.FC = () => {
       <FaqAdviceModal />
       <LegalModal />
       <AccountModal />
+      <CompareBar />
+      <CompareModal />
       <Toast />
     </div>
   );

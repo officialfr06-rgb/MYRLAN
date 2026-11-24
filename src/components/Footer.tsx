@@ -13,11 +13,34 @@ export const Footer: React.FC = () => {
   } = useShop();
 
   const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [isSubscribing, setIsSubscribing] = useState(false);
 
-  const handleNewsletter = (e: React.FormEvent) => {
+  const handleNewsletter = async (e: React.FormEvent) => {
     e.preventDefault();
-    setNewsletterEmail('');
-    showToast('Merci pour votre inscription à notre newsletter santé & bien-être !');
+    if (!newsletterEmail.trim() || isSubscribing) return;
+    setIsSubscribing(true);
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newsletterEmail.trim(), source: 'footer' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewsletterEmail('');
+        if (data.alreadySubscribed) {
+          showToast('Vous êtes déjà inscrit à notre newsletter Myrlan.');
+        } else {
+          showToast(`Merci ! Inscription confirmée — profitez de -10% avec le code ${data.promoCode || 'BIENVENUE10'}.`);
+        }
+      } else {
+        showToast(data.error || 'Adresse email invalide.');
+      }
+    } catch {
+      showToast('Erreur de connexion au serveur.');
+    } finally {
+      setIsSubscribing(false);
+    }
   };
 
   const openCategory = (cat: string) => {
@@ -54,9 +77,10 @@ export const Footer: React.FC = () => {
             </div>
             <button
               type="submit"
-              className="px-6 py-3 bg-amber-400 hover:bg-amber-500 text-blue-950 font-bold rounded-xl text-sm transition-all shadow-md shrink-0"
+              disabled={isSubscribing}
+              className="px-6 py-3 bg-amber-400 hover:bg-amber-500 disabled:opacity-60 text-blue-950 font-bold rounded-xl text-sm transition-all shadow-md shrink-0"
             >
-              S'inscrire
+              {isSubscribing ? 'Envoi...' : "S'inscrire"}
             </button>
           </form>
         </div>
