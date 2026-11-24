@@ -1188,12 +1188,20 @@ async function startServer() {
   }, express.static(uploadsDir, { dotfiles: 'deny', maxAge: '7d' }));
 
   const PORT = process.env.PORT || 3000;
-  const hasAuth = process.env.SMTP_USER && process.env.SMTP_PASS;
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+  const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+  const smtpSecure =
+    process.env.SMTP_SECURE !== undefined
+      ? process.env.SMTP_SECURE === 'true'
+      : smtpPort === 465;
+  const SMTP_FROM_EMAIL = (process.env.SMTP_FROM || process.env.SMTP_USER || 'myrlan@myrlan.com').trim();
+  const SMTP_FROM_NAME = (process.env.SMTP_FROM_NAME || 'Myrlan Parapharmacie').trim();
+  const smtpFromHeader = `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`;
 
   const smtpTransporter = hasAuth ? nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: false,
+    port: smtpPort,
+    secure: smtpSecure,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
@@ -1238,13 +1246,14 @@ async function startServer() {
     let dispatchStatus: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur' = hasAuth ? 'Envoyé (SMTP)' : 'Mode Aperçu';
     try {
       await smtpTransporter.sendMail({
-        from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
+        from: smtpFromHeader,
         to: cleanTo,
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html
       });
-    } catch {
+    } catch (err: any) {
+      console.error('[SMTP] Erreur envoi template:', err?.message || err);
       dispatchStatus = hasAuth ? 'Erreur' : 'Mode Aperçu';
     }
 
@@ -2138,13 +2147,14 @@ async function startServer() {
 
     try {
       await smtpTransporter.sendMail({
-        from: '"Myrlan Officine" <noreply@myrlan.fr>',
-        to: 'officine@myrlan.fr',
+        from: smtpFromHeader,
+        to: process.env.SMTP_CONTACT_TO || SMTP_FROM_EMAIL,
         replyTo: entry.email,
         subject: `[Contact Site] ${entry.subject}`,
         text: `De : ${entry.name} (${entry.email} / ${entry.phone})\n\n${entry.message}`
       });
-    } catch {
+    } catch (err: any) {
+      console.error('[SMTP] Erreur envoi contact:', err?.message || err);
       // Fallback simulated transport
     }
 
@@ -2531,12 +2541,13 @@ async function startServer() {
 
       try {
         await smtpTransporter.sendMail({
-          from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
+          from: smtpFromHeader,
           to: cleanEmail,
           subject: 'Réinitialisation de votre mot de passe Myrlan',
           text: `Bonjour,\n\nCliquez sur le lien suivant pour réinitialiser votre mot de passe (valide 1h) :\n${resetUrl}`
         });
-      } catch {
+      } catch (err: any) {
+        console.error('[SMTP] Erreur envoi reset-password:', err?.message || err);
         // Simulated fallback
       }
     }
@@ -2649,12 +2660,13 @@ async function startServer() {
       const { to, subject, message } = req.body;
       try {
         await smtpTransporter.sendMail({
-          from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
+          from: smtpFromHeader,
           to: to || 'client@example.com',
           subject: subject || 'Confirmation de commande Myrlan',
           text: message || 'Votre commande a bien été prise en compte.'
         });
-      } catch {
+      } catch (err: any) {
+        console.error('[SMTP] Erreur /api/send-email:', err?.message || err);
         // Simulated fallback
       }
       res.json({ success: true, message: 'Email envoyé avec succès via le serveur SMTP.' });
@@ -3777,13 +3789,14 @@ Policy: ${baseUrl}/confidentialite
       let dispatchStatus: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur' = hasAuth ? 'Envoyé (SMTP)' : 'Mode Aperçu';
       try {
         await smtpTransporter.sendMail({
-          from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
+          from: smtpFromHeader,
           to: sub.email,
           subject: rendered.subject,
           text: rendered.text,
           html: rendered.html
         });
-      } catch {
+      } catch (err: any) {
+        console.error('[SMTP] Erreur campagne newsletter:', err?.message || err);
         dispatchStatus = hasAuth ? 'Erreur' : 'Mode Aperçu';
       }
       db.emailLogs = [
@@ -3975,13 +3988,14 @@ Policy: ${baseUrl}/confidentialite
     let dispatchStatus: 'Envoyé (SMTP)' | 'Mode Aperçu' | 'Erreur' = hasAuth ? 'Envoyé (SMTP)' : 'Mode Aperçu';
     try {
       await smtpTransporter.sendMail({
-        from: '"Myrlan Officine — Achats" <achats@myrlan.fr>',
+        from: smtpFromHeader,
         to: cleanTo,
         subject: cleanSubject,
         text: cleanBody,
         html
       });
-    } catch {
+    } catch (err: any) {
+      console.error('[SMTP] Erreur envoi réapprovisionnement:', err?.message || err);
       dispatchStatus = hasAuth ? 'Erreur' : 'Mode Aperçu';
     }
 
