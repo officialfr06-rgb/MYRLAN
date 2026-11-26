@@ -103,7 +103,7 @@ export const Footer: React.FC = () => {
               Votre parapharmacie en ligne agréée. Large sélection de produits de santé, beauté, bio et compléments alimentaires au meilleur prix.
             </p>
             <div className="text-xs text-blue-400 font-medium">
-              15 rue de la République, 69002 Lyon • ARS &amp; CNOP
+              6 boulevard Général Leclerc, 83300 Draguignan • ARS &amp; CNOP
             </div>
           </div>
 

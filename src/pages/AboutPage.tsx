@@ -47,7 +47,7 @@ export const AboutPage: React.FC = () => {
           À propos de la Parapharmacie Myrlan
         </h1>
         <p className="text-blue-100 text-sm sm:text-base max-w-2xl leading-relaxed">
-          Adossée à notre officine historique au cœur de Lyon, Myrlan réunit l’exigence scientifique de pharmaciens diplômés et la praticité d’une parapharmacie en ligne transparente et sécurisée.
+          Adossée à notre officine historique au cœur de Draguignan, Myrlan réunit l’exigence scientifique de pharmaciens diplômés et la praticité d’une parapharmacie en ligne transparente et sécurisée.
         </p>
       </div>
 

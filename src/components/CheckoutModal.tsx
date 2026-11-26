@@ -277,7 +277,7 @@ export const CheckoutModal: React.FC = () => {
                     required
                     value={address.city}
                     onChange={(e) => setAddress({ ...address, city: e.target.value })}
-                    placeholder="Lyon"
+                    placeholder="Draguignan"
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -288,7 +288,7 @@ export const CheckoutModal: React.FC = () => {
                     required
                     value={address.address}
                     onChange={(e) => setAddress({ ...address, address: e.target.value })}
-                    placeholder="15 rue de la République"
+                    placeholder="6 boulevard Général Leclerc"
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -299,7 +299,7 @@ export const CheckoutModal: React.FC = () => {
                     required
                     value={address.postalCode}
                     onChange={(e) => setAddress({ ...address, postalCode: e.target.value })}
-                    placeholder="69002"
+                    placeholder="83300"
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

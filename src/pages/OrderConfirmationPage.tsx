@@ -87,8 +87,8 @@ export const OrderConfirmationPage: React.FC<{ orderId: string }> = ({ orderId }
         <div className="flex flex-col sm:flex-row justify-between gap-6 border-b border-gray-200 pb-6">
           <div className="space-y-1">
             <div className="text-2xl font-black text-blue-900">Myrlan Parapharmacie</div>
-            <div className="text-xs text-gray-600">Myrlan Pharma S.A. — RCS Lyon 984 231 092</div>
-            <div className="text-xs text-gray-600">15 rue de la République, 69002 Lyon, France</div>
+            <div className="text-xs text-gray-600">Myrlan Pharma S.A. — RCS Draguignan 984 231 092</div>
+            <div className="text-xs text-gray-600">6 boulevard Général Leclerc, 83300 Draguignan, France</div>
             <div className="text-xs text-gray-600">TVA Intracommunautaire : FR32984231092</div>
           </div>
 

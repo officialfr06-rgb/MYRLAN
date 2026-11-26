@@ -18,8 +18,8 @@ export function downloadOrderInvoicePdf(order: Order): void {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text('Myrlan Pharma S.A. - 15 rue de la Republique, 69002 Lyon', marginX, 21);
-  doc.text('RCS Lyon 984 231 092 - TVA Intracommunautaire FR32984231092', marginX, 26);
+  doc.text('Myrlan Pharma S.A. - 6 boulevard Général Leclerc, 83300 Draguignan', marginX, 21);
+  doc.text('RCS Draguignan 984 231 092 - TVA Intracommunautaire FR32984231092', marginX, 26);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);

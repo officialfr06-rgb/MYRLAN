@@ -28,7 +28,7 @@ export const LegalModal: React.FC = () => {
         <div className="p-6 sm:p-8 space-y-6 max-h-[70vh] overflow-y-auto text-xs text-gray-700 leading-relaxed">
           <section className="space-y-2">
             <h3 className="font-bold text-sm text-gray-900">1. Éditeur du site</h3>
-            <p>Le site Myrlan est édité par la société Myrlan Pharma S.A. au capital de 50 000 €, immatriculée au RCS de Lyon sous le numéro 984 231 092. Siège social : 15 rue de la République, 69002 Lyon, France.</p>
+            <p>Le site Myrlan est édité par la société Myrlan Pharma S.A. au capital de 50 000 €, immatriculée au RCS de Draguignan sous le numéro 984 231 092. Siège social : 6 boulevard Général Leclerc, 83300 Draguignan, France.</p>
           </section>
 
           <section className="space-y-2">

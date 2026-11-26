@@ -47,7 +47,7 @@ const ROUTE_SEO_META: Record<string, { title: string; description: string }> = {
   },
   '/contact': {
     title: 'Contact & Retrait Click & Collect | Pharmacie Myrlan',
-    description: 'Contactez nos pharmaciens par message ou tchat en direct, consultez nos horaires et notre comptoir Click & Collect à Lyon.'
+    description: 'Contactez nos pharmaciens par message ou tchat en direct, consultez nos horaires et notre comptoir Click & Collect à Draguignan.'
   },
   '/cgv': {
     title: 'Conditions Générales de Vente | Myrlan',
@@ -215,9 +215,9 @@ export const SeoHeadManager: React.FC = () => {
         url: baseOrigin,
         address: {
           '@type': 'PostalAddress',
-          streetAddress: '15 rue de la République',
-          addressLocality: 'Lyon',
-          postalCode: '69002',
+          streetAddress: '6 boulevard Général Leclerc',
+          addressLocality: 'Draguignan',
+          postalCode: '83300',
           addressCountry: 'FR'
         },
         telephone: '+33478004218'

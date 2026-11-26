@@ -247,7 +247,7 @@ export const AdminAppointmentsDashboard: React.FC<AdminAppointmentsDashboardProp
                 <div className="font-bold text-slate-900">{selectedAppt.serviceLabel}</div>
                 <div className="text-slate-600">{selectedAppt.date} à {selectedAppt.timeSlot} ({selectedAppt.durationMinutes} min)</div>
                 <div className="text-slate-500">
-                  Mode : {selectedAppt.format === 'visio' ? 'Téléconsultation / Téléphone' : 'À l’officine (Lyon 2e)'}
+                  Mode : {selectedAppt.format === 'visio' ? 'Téléconsultation / Téléphone' : 'À l’officine (Draguignan)'}
                 </div>
               </div>
 

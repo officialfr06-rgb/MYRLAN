@@ -43,7 +43,7 @@ function buildRestockBody(lines: RestockOrderLine[], supplierName: string): stri
     '',
     `Total : ${lines.length} référence(s) pour ${totalUnits} unité(s).`,
     '',
-    'Merci de bien vouloir nous confirmer la disponibilité et le délai de livraison vers notre officine (Myrlan Parapharmacie, 15 rue de la République, 69002 Lyon).',
+    'Merci de bien vouloir nous confirmer la disponibilité et le délai de livraison vers notre officine (Myrlan Parapharmacie, 6 boulevard Général Leclerc, 83300 Draguignan).',
     '',
     'Cordialement,',
     'L’équipe Pharmaceutique — Myrlan Officine'

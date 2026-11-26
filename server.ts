@@ -325,9 +325,9 @@ const INITIAL_ORDERS = [
       fullName: 'Marie Dupont',
       email: 'marie.dupont@example.com',
       phone: '06 12 34 56 78',
-      address: '15 rue de la République',
-      city: 'Lyon',
-      postalCode: '69002',
+      address: '6 boulevard Général Leclerc',
+      city: 'Draguignan',
+      postalCode: '83300',
       country: 'France'
     },
     paymentMethod: 'card',
@@ -340,8 +340,8 @@ const INITIAL_ORDERS = [
 ];
 
 const INITIAL_USERS = [
-  { id: 'usr-1', name: 'Administrateur Myrlan', email: 'aaa@gmail.com', role: 'admin', password: hashPassword('123456789'), createdAt: '2026-01-10', savedAddresses: [] },
-  { id: 'usr-2', name: 'Admin Secondaire', email: 'admin2@myrlan.fr', role: 'admin', password: hashPassword('admin'), createdAt: '2026-01-12', savedAddresses: [] },
+  { id: 'usr-1', name: 'Administrateur Myrlan', email: 'myrlan@mrlan.com', role: 'admin', password: hashPassword('123456789'), createdAt: '2026-01-10', savedAddresses: [] },
+  { id: 'usr-2', name: 'Administrateur Officiel', email: 'official.fr06@gmail.com', role: 'admin', password: hashPassword('123456789'), createdAt: '2026-01-12', savedAddresses: [] },
   {
     id: 'usr-3',
     name: 'Marie Dupont',
@@ -357,9 +357,9 @@ const INITIAL_USERS = [
         label: 'Domicile',
         fullName: 'Marie Dupont',
         phone: '06 12 34 56 78',
-        address: '15 rue de la République',
-        city: 'Lyon',
-        postalCode: '69002',
+        address: '6 boulevard Général Leclerc',
+        city: 'Draguignan',
+        postalCode: '83300',
         country: 'France',
         isDefault: true
       }
@@ -960,10 +960,56 @@ function getDatabase() {
     }
     if (!Array.isArray(parsed.restockNotifications)) { parsed.restockNotifications = []; dirty = true; }
     if (!Array.isArray(parsed.restockEmails)) { parsed.restockEmails = []; dirty = true; }
-    for (const u of parsed.users) {
-      if (!u.referralCode) {
-        ensureUserReferralCode(u);
+    if (Array.isArray(parsed.users)) {
+      const beforeLen = parsed.users.length;
+      parsed.users = parsed.users.filter((u: any) => u.email?.toLowerCase() !== 'aaa@gmail.com');
+      if (parsed.users.length !== beforeLen) dirty = true;
+
+      const hasMyrlan = parsed.users.some((u: any) => u.email?.toLowerCase() === 'myrlan@mrlan.com');
+      if (!hasMyrlan) {
+        parsed.users.push({
+          id: `usr-${Date.now()}-1`,
+          name: 'Administrateur Myrlan',
+          email: 'myrlan@mrlan.com',
+          role: 'admin',
+          password: hashPassword('123456789'),
+          createdAt: new Date().toISOString().split('T')[0],
+          savedAddresses: []
+        });
         dirty = true;
+      } else {
+        const u = parsed.users.find((x: any) => x.email?.toLowerCase() === 'myrlan@mrlan.com');
+        if (u && u.role !== 'admin') {
+          u.role = 'admin';
+          dirty = true;
+        }
+      }
+
+      const hasOfficial = parsed.users.some((u: any) => u.email?.toLowerCase() === 'official.fr06@gmail.com');
+      if (!hasOfficial) {
+        parsed.users.push({
+          id: `usr-${Date.now()}-2`,
+          name: 'Administrateur Officiel',
+          email: 'official.fr06@gmail.com',
+          role: 'admin',
+          password: hashPassword('123456789'),
+          createdAt: new Date().toISOString().split('T')[0],
+          savedAddresses: []
+        });
+        dirty = true;
+      } else {
+        const u = parsed.users.find((x: any) => x.email?.toLowerCase() === 'official.fr06@gmail.com');
+        if (u && u.role !== 'admin') {
+          u.role = 'admin';
+          dirty = true;
+        }
+      }
+
+      for (const u of parsed.users) {
+        if (!u.referralCode) {
+          ensureUserReferralCode(u);
+          dirty = true;
+        }
       }
     }
     if (dirty) {

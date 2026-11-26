@@ -29,7 +29,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({ message })
         </div>
 
         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500 space-y-1">
-          <div className="font-semibold text-slate-700">15 rue de la République, 69002 Lyon</div>
+          <div className="font-semibold text-slate-700">6 boulevard Général Leclerc, 83300 Draguignan</div>
           <div>Service client &amp; Commandes temporairement suspendus pour mise à jour.</div>
         </div>
 

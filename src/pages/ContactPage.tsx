@@ -70,9 +70,9 @@ export const ContactPage: React.FC = () => {
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-gray-900">Pharmacie Myrlan Lyon Presqu’île</div>
-                  <p>15 rue de la République, 69002 Lyon, France</p>
-                  <p className="text-blue-700 font-semibold mt-0.5">Métro Cordeliers / Bellecour — Comptoir Click &amp; Collect dédié</p>
+                  <div className="font-bold text-gray-900">Pharmacie Myrlan Draguignan Centre</div>
+                  <p>6 boulevard Général Leclerc, 83300 Draguignan, France</p>
+                  <p className="text-blue-700 font-semibold mt-0.5">Centre-ville — Comptoir Click &amp; Collect dédié</p>
                 </div>
               </div>
 
