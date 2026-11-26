@@ -19357,14 +19357,14 @@ var require_etag = __commonJS({
   "node_modules/etag/index.js"(exports2, module2) {
     "use strict";
     module2.exports = etag;
-    var crypto8 = require("crypto");
+    var crypto9 = require("crypto");
     var Stats = require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash = crypto8.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash = crypto9.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash + '"';
     }
@@ -21528,9 +21528,9 @@ var require_application = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/charset.js
+// node_modules/accepts/node_modules/negotiator/lib/charset.js
 var require_charset = __commonJS({
-  "node_modules/negotiator/lib/charset.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/charset.js"(exports2, module2) {
     "use strict";
     module2.exports = preferredCharsets;
     module2.exports.preferredCharsets = preferredCharsets;
@@ -21615,9 +21615,9 @@ var require_charset = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/encoding.js
+// node_modules/accepts/node_modules/negotiator/lib/encoding.js
 var require_encoding = __commonJS({
-  "node_modules/negotiator/lib/encoding.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/encoding.js"(exports2, module2) {
     "use strict";
     module2.exports = preferredEncodings;
     module2.exports.preferredEncodings = preferredEncodings;
@@ -21713,9 +21713,9 @@ var require_encoding = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/language.js
+// node_modules/accepts/node_modules/negotiator/lib/language.js
 var require_language = __commonJS({
-  "node_modules/negotiator/lib/language.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/language.js"(exports2, module2) {
     "use strict";
     module2.exports = preferredLanguages;
     module2.exports.preferredLanguages = preferredLanguages;
@@ -21808,9 +21808,9 @@ var require_language = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/mediaType.js
+// node_modules/accepts/node_modules/negotiator/lib/mediaType.js
 var require_mediaType = __commonJS({
-  "node_modules/negotiator/lib/mediaType.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/mediaType.js"(exports2, module2) {
     "use strict";
     module2.exports = preferredMediaTypes;
     module2.exports.preferredMediaTypes = preferredMediaTypes;
@@ -21970,9 +21970,9 @@ var require_mediaType = __commonJS({
   }
 });
 
-// node_modules/negotiator/index.js
+// node_modules/accepts/node_modules/negotiator/index.js
 var require_negotiator = __commonJS({
-  "node_modules/negotiator/index.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/index.js"(exports2, module2) {
     "use strict";
     var preferredCharsets = require_charset();
     var preferredEncodings = require_encoding();
@@ -22273,11 +22273,11 @@ var require_request = __commonJS({
 // node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "node_modules/cookie-signature/index.js"(exports2) {
-    var crypto8 = require("crypto");
+    var crypto9 = require("crypto");
     exports2.sign = function(val, secret) {
       if ("string" !== typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto8.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto9.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports2.unsign = function(val, secret) {
       if ("string" !== typeof val) throw new TypeError("Signed cookie string must be provided.");
@@ -22286,7 +22286,7 @@ var require_cookie_signature = __commonJS({
       return sha1(mac) == sha1(val) ? str : false;
     };
     function sha1(str) {
-      return crypto8.createHash("sha1").update(str).digest("hex");
+      return crypto9.createHash("sha1").update(str).digest("hex");
     }
   }
 });
@@ -23254,13 +23254,828 @@ var require_express2 = __commonJS({
   }
 });
 
+// node_modules/negotiator/lib/charset.js
+var require_charset2 = __commonJS({
+  "node_modules/negotiator/lib/charset.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredCharsets;
+    module2.exports.preferredCharsets = preferredCharsets;
+    var simpleCharsetRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+    function parseAcceptCharset(accept) {
+      var accepts = accept.split(",");
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var charset = parseCharset(accepts[i].trim(), i);
+        if (charset) {
+          accepts[j++] = charset;
+        }
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseCharset(str, i) {
+      var match = simpleCharsetRegExp.exec(str);
+      if (!match) return null;
+      var charset = match[1];
+      var q = 1;
+      if (match[2]) {
+        var params = match[2].split(";");
+        for (var j = 0; j < params.length; j++) {
+          var p = params[j].trim().split("=");
+          if (p[0] === "q") {
+            q = parseFloat(p[1]);
+            break;
+          }
+        }
+      }
+      return {
+        charset,
+        q,
+        i
+      };
+    }
+    function getCharsetPriority(charset, accepted, index) {
+      var priority = { o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(charset, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(charset, spec, index) {
+      var s = 0;
+      if (spec.charset.toLowerCase() === charset.toLowerCase()) {
+        s |= 1;
+      } else if (spec.charset !== "*") {
+        return null;
+      }
+      return {
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredCharsets(accept, provided) {
+      var accepts = parseAcceptCharset(accept === void 0 ? "*" : accept || "");
+      if (!provided) {
+        return accepts.filter(isQuality).sort(compareSpecs).map(getFullCharset);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getCharsetPriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(compareSpecs).map(function getCharset(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a, b) {
+      return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i || 0;
+    }
+    function getFullCharset(spec) {
+      return spec.charset;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+  }
+});
+
+// node_modules/negotiator/lib/encoding.js
+var require_encoding2 = __commonJS({
+  "node_modules/negotiator/lib/encoding.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredEncodings;
+    module2.exports.preferredEncodings = preferredEncodings;
+    var simpleEncodingRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+    function parseAcceptEncoding(accept) {
+      var accepts = accept.split(",");
+      var hasIdentity = false;
+      var minQuality = 1;
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var encoding = parseEncoding(accepts[i].trim(), i);
+        if (encoding) {
+          accepts[j++] = encoding;
+          hasIdentity = hasIdentity || specify("identity", encoding);
+          minQuality = Math.min(minQuality, encoding.q || 1);
+        }
+      }
+      if (!hasIdentity) {
+        accepts[j++] = {
+          encoding: "identity",
+          q: minQuality,
+          i
+        };
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseEncoding(str, i) {
+      var match = simpleEncodingRegExp.exec(str);
+      if (!match) return null;
+      var encoding = match[1];
+      var q = 1;
+      if (match[2]) {
+        var params = match[2].split(";");
+        for (var j = 0; j < params.length; j++) {
+          var p = params[j].trim().split("=");
+          if (p[0] === "q") {
+            q = parseFloat(p[1]);
+            break;
+          }
+        }
+      }
+      return {
+        encoding,
+        q,
+        i
+      };
+    }
+    function getEncodingPriority(encoding, accepted, index) {
+      var priority = { encoding, o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(encoding, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(encoding, spec, index) {
+      var s = 0;
+      if (spec.encoding.toLowerCase() === encoding.toLowerCase()) {
+        s |= 1;
+      } else if (spec.encoding !== "*") {
+        return null;
+      }
+      return {
+        encoding,
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredEncodings(accept, provided, preferred) {
+      var accepts = parseAcceptEncoding(accept || "");
+      var comparator = preferred ? function comparator2(a, b) {
+        if (a.q !== b.q) {
+          return b.q - a.q;
+        }
+        var aPreferred = preferred.indexOf(a.encoding);
+        var bPreferred = preferred.indexOf(b.encoding);
+        if (aPreferred === -1 && bPreferred === -1) {
+          return b.s - a.s || a.o - b.o || a.i - b.i;
+        }
+        if (aPreferred !== -1 && bPreferred !== -1) {
+          return aPreferred - bPreferred;
+        }
+        return aPreferred === -1 ? 1 : -1;
+      } : compareSpecs;
+      if (!provided) {
+        return accepts.filter(isQuality).sort(comparator).map(getFullEncoding);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getEncodingPriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(comparator).map(function getEncoding(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a, b) {
+      return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i;
+    }
+    function getFullEncoding(spec) {
+      return spec.encoding;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+  }
+});
+
+// node_modules/negotiator/lib/language.js
+var require_language2 = __commonJS({
+  "node_modules/negotiator/lib/language.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredLanguages;
+    module2.exports.preferredLanguages = preferredLanguages;
+    var simpleLanguageRegExp = /^\s*([^\s\-;]+)(?:-([^\s;]+))?\s*(?:;(.*))?$/;
+    function parseAcceptLanguage(accept) {
+      var accepts = accept.split(",");
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var language = parseLanguage(accepts[i].trim(), i);
+        if (language) {
+          accepts[j++] = language;
+        }
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseLanguage(str, i) {
+      var match = simpleLanguageRegExp.exec(str);
+      if (!match) return null;
+      var prefix = match[1];
+      var suffix = match[2];
+      var full = prefix;
+      if (suffix) full += "-" + suffix;
+      var q = 1;
+      if (match[3]) {
+        var params = match[3].split(";");
+        for (var j = 0; j < params.length; j++) {
+          var p = params[j].split("=");
+          if (p[0] === "q") q = parseFloat(p[1]);
+        }
+      }
+      return {
+        prefix,
+        suffix,
+        q,
+        i,
+        full
+      };
+    }
+    function getLanguagePriority(language, accepted, index) {
+      var priority = { o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(language, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(language, spec, index) {
+      var p = parseLanguage(language);
+      if (!p) return null;
+      var s = 0;
+      if (spec.full.toLowerCase() === p.full.toLowerCase()) {
+        s |= 4;
+      } else if (spec.prefix.toLowerCase() === p.full.toLowerCase()) {
+        s |= 2;
+      } else if (spec.full.toLowerCase() === p.prefix.toLowerCase()) {
+        s |= 1;
+      } else if (spec.full !== "*") {
+        return null;
+      }
+      return {
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredLanguages(accept, provided) {
+      var accepts = parseAcceptLanguage(accept === void 0 ? "*" : accept || "");
+      if (!provided) {
+        return accepts.filter(isQuality).sort(compareSpecs).map(getFullLanguage);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getLanguagePriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(compareSpecs).map(function getLanguage(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a, b) {
+      return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i || 0;
+    }
+    function getFullLanguage(spec) {
+      return spec.full;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+  }
+});
+
+// node_modules/negotiator/lib/mediaType.js
+var require_mediaType2 = __commonJS({
+  "node_modules/negotiator/lib/mediaType.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredMediaTypes;
+    module2.exports.preferredMediaTypes = preferredMediaTypes;
+    var simpleMediaTypeRegExp = /^\s*([^\s\/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
+    function parseAccept(accept) {
+      var accepts = splitMediaTypes(accept);
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var mediaType = parseMediaType(accepts[i].trim(), i);
+        if (mediaType) {
+          accepts[j++] = mediaType;
+        }
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseMediaType(str, i) {
+      var match = simpleMediaTypeRegExp.exec(str);
+      if (!match) return null;
+      var params = /* @__PURE__ */ Object.create(null);
+      var q = 1;
+      var subtype = match[2];
+      var type = match[1];
+      if (match[3]) {
+        var kvps = splitParameters(match[3]).map(splitKeyValuePair);
+        for (var j = 0; j < kvps.length; j++) {
+          var pair = kvps[j];
+          var key = pair[0].toLowerCase();
+          var val = pair[1];
+          var value = val && val[0] === '"' && val[val.length - 1] === '"' ? val.slice(1, -1) : val;
+          if (key === "q") {
+            q = parseFloat(value);
+            break;
+          }
+          params[key] = value;
+        }
+      }
+      return {
+        type,
+        subtype,
+        params,
+        q,
+        i
+      };
+    }
+    function getMediaTypePriority(type, accepted, index) {
+      var priority = { o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(type, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(type, spec, index) {
+      var p = parseMediaType(type);
+      var s = 0;
+      if (!p) {
+        return null;
+      }
+      if (spec.type.toLowerCase() == p.type.toLowerCase()) {
+        s |= 4;
+      } else if (spec.type != "*") {
+        return null;
+      }
+      if (spec.subtype.toLowerCase() == p.subtype.toLowerCase()) {
+        s |= 2;
+      } else if (spec.subtype != "*") {
+        return null;
+      }
+      var keys = Object.keys(spec.params);
+      if (keys.length > 0) {
+        if (keys.every(function(k) {
+          return spec.params[k] == "*" || (spec.params[k] || "").toLowerCase() == (p.params[k] || "").toLowerCase();
+        })) {
+          s |= 1;
+        } else {
+          return null;
+        }
+      }
+      return {
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredMediaTypes(accept, provided) {
+      var accepts = parseAccept(accept === void 0 ? "*/*" : accept || "");
+      if (!provided) {
+        return accepts.filter(isQuality).sort(compareSpecs).map(getFullType);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getMediaTypePriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(compareSpecs).map(function getType(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a, b) {
+      return b.q - a.q || b.s - a.s || a.o - b.o || a.i - b.i || 0;
+    }
+    function getFullType(spec) {
+      return spec.type + "/" + spec.subtype;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+    function quoteCount(string) {
+      var count = 0;
+      var index = 0;
+      while ((index = string.indexOf('"', index)) !== -1) {
+        count++;
+        index++;
+      }
+      return count;
+    }
+    function splitKeyValuePair(str) {
+      var index = str.indexOf("=");
+      var key;
+      var val;
+      if (index === -1) {
+        key = str;
+      } else {
+        key = str.slice(0, index);
+        val = str.slice(index + 1);
+      }
+      return [key, val];
+    }
+    function splitMediaTypes(accept) {
+      var accepts = accept.split(",");
+      for (var i = 1, j = 0; i < accepts.length; i++) {
+        if (quoteCount(accepts[j]) % 2 == 0) {
+          accepts[++j] = accepts[i];
+        } else {
+          accepts[j] += "," + accepts[i];
+        }
+      }
+      accepts.length = j + 1;
+      return accepts;
+    }
+    function splitParameters(str) {
+      var parameters = str.split(";");
+      for (var i = 1, j = 0; i < parameters.length; i++) {
+        if (quoteCount(parameters[j]) % 2 == 0) {
+          parameters[++j] = parameters[i];
+        } else {
+          parameters[j] += ";" + parameters[i];
+        }
+      }
+      parameters.length = j + 1;
+      for (var i = 0; i < parameters.length; i++) {
+        parameters[i] = parameters[i].trim();
+      }
+      return parameters;
+    }
+  }
+});
+
+// node_modules/negotiator/index.js
+var require_negotiator2 = __commonJS({
+  "node_modules/negotiator/index.js"(exports2, module2) {
+    "use strict";
+    var preferredCharsets = require_charset2();
+    var preferredEncodings = require_encoding2();
+    var preferredLanguages = require_language2();
+    var preferredMediaTypes = require_mediaType2();
+    module2.exports = Negotiator;
+    module2.exports.Negotiator = Negotiator;
+    function Negotiator(request) {
+      if (!(this instanceof Negotiator)) {
+        return new Negotiator(request);
+      }
+      this.request = request;
+    }
+    Negotiator.prototype.charset = function charset(available) {
+      var set = this.charsets(available);
+      return set && set[0];
+    };
+    Negotiator.prototype.charsets = function charsets(available) {
+      return preferredCharsets(this.request.headers["accept-charset"], available);
+    };
+    Negotiator.prototype.encoding = function encoding(available, preferred) {
+      var set = this.encodings(available, preferred);
+      return set && set[0];
+    };
+    Negotiator.prototype.encodings = function encodings(available, preferred) {
+      return preferredEncodings(this.request.headers["accept-encoding"], available, preferred);
+    };
+    Negotiator.prototype.language = function language(available) {
+      var set = this.languages(available);
+      return set && set[0];
+    };
+    Negotiator.prototype.languages = function languages(available) {
+      return preferredLanguages(this.request.headers["accept-language"], available);
+    };
+    Negotiator.prototype.mediaType = function mediaType(available) {
+      var set = this.mediaTypes(available);
+      return set && set[0];
+    };
+    Negotiator.prototype.mediaTypes = function mediaTypes(available) {
+      return preferredMediaTypes(this.request.headers.accept, available);
+    };
+    Negotiator.prototype.preferredCharset = Negotiator.prototype.charset;
+    Negotiator.prototype.preferredCharsets = Negotiator.prototype.charsets;
+    Negotiator.prototype.preferredEncoding = Negotiator.prototype.encoding;
+    Negotiator.prototype.preferredEncodings = Negotiator.prototype.encodings;
+    Negotiator.prototype.preferredLanguage = Negotiator.prototype.language;
+    Negotiator.prototype.preferredLanguages = Negotiator.prototype.languages;
+    Negotiator.prototype.preferredMediaType = Negotiator.prototype.mediaType;
+    Negotiator.prototype.preferredMediaTypes = Negotiator.prototype.mediaTypes;
+  }
+});
+
+// node_modules/compressible/index.js
+var require_compressible = __commonJS({
+  "node_modules/compressible/index.js"(exports2, module2) {
+    "use strict";
+    var db = require_mime_db();
+    var COMPRESSIBLE_TYPE_REGEXP = /^text\/|\+(?:json|text|xml)$/i;
+    var EXTRACT_TYPE_REGEXP = /^\s*([^;\s]*)(?:;|\s|$)/;
+    module2.exports = compressible;
+    function compressible(type) {
+      if (!type || typeof type !== "string") {
+        return false;
+      }
+      var match = EXTRACT_TYPE_REGEXP.exec(type);
+      var mime = match && match[1].toLowerCase();
+      var data = db[mime];
+      if (data && data.compressible !== void 0) {
+        return data.compressible;
+      }
+      return COMPRESSIBLE_TYPE_REGEXP.test(mime) || void 0;
+    }
+  }
+});
+
+// node_modules/on-headers/index.js
+var require_on_headers = __commonJS({
+  "node_modules/on-headers/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = onHeaders;
+    var http2 = require("http");
+    var isAppendHeaderSupported = typeof http2.ServerResponse.prototype.appendHeader === "function";
+    var set1dArray = isAppendHeaderSupported ? set1dArrayWithAppend : set1dArrayWithSet;
+    function createWriteHead(prevWriteHead, listener) {
+      var fired = false;
+      return function writeHead(statusCode) {
+        var args = setWriteHeadHeaders.apply(this, arguments);
+        if (!fired) {
+          fired = true;
+          listener.call(this);
+          if (typeof args[0] === "number" && this.statusCode !== args[0]) {
+            args[0] = this.statusCode;
+            args.length = 1;
+          }
+        }
+        return prevWriteHead.apply(this, args);
+      };
+    }
+    function onHeaders(res, listener) {
+      if (!res) {
+        throw new TypeError("argument res is required");
+      }
+      if (typeof listener !== "function") {
+        throw new TypeError("argument listener must be a function");
+      }
+      res.writeHead = createWriteHead(res.writeHead, listener);
+    }
+    function setHeadersFromArray(res, headers) {
+      if (headers.length && Array.isArray(headers[0])) {
+        set2dArray(res, headers);
+      } else {
+        if (headers.length % 2 !== 0) {
+          throw new TypeError("headers array is malformed");
+        }
+        set1dArray(res, headers);
+      }
+    }
+    function setHeadersFromObject(res, headers) {
+      var keys = Object.keys(headers);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (k) res.setHeader(k, headers[k]);
+      }
+    }
+    function setWriteHeadHeaders(statusCode) {
+      var length = arguments.length;
+      var headerIndex = length > 1 && typeof arguments[1] === "string" ? 2 : 1;
+      var headers = length >= headerIndex + 1 ? arguments[headerIndex] : void 0;
+      this.statusCode = statusCode;
+      if (Array.isArray(headers)) {
+        setHeadersFromArray(this, headers);
+      } else if (headers) {
+        setHeadersFromObject(this, headers);
+      }
+      var args = new Array(Math.min(length, headerIndex));
+      for (var i = 0; i < args.length; i++) {
+        args[i] = arguments[i];
+      }
+      return args;
+    }
+    function set2dArray(res, headers) {
+      var key;
+      for (var i = 0; i < headers.length; i++) {
+        key = headers[i][0];
+        if (key) {
+          res.setHeader(key, headers[i][1]);
+        }
+      }
+    }
+    function set1dArrayWithAppend(res, headers) {
+      for (var i = 0; i < headers.length; i += 2) {
+        res.removeHeader(headers[i]);
+      }
+      var key;
+      for (var j = 0; j < headers.length; j += 2) {
+        key = headers[j];
+        if (key) {
+          res.appendHeader(key, headers[j + 1]);
+        }
+      }
+    }
+    function set1dArrayWithSet(res, headers) {
+      var key;
+      for (var i = 0; i < headers.length; i += 2) {
+        key = headers[i];
+        if (key) {
+          res.setHeader(key, headers[i + 1]);
+        }
+      }
+    }
+  }
+});
+
+// node_modules/compression/index.js
+var require_compression = __commonJS({
+  "node_modules/compression/index.js"(exports2, module2) {
+    "use strict";
+    var Negotiator = require_negotiator2();
+    var Buffer2 = require_safe_buffer().Buffer;
+    var bytes = require_bytes();
+    var compressible = require_compressible();
+    var debug = require_src()("compression");
+    var destroy = require_destroy();
+    var onHeaders = require_on_headers();
+    var vary = require_vary();
+    var zlib2 = require("zlib");
+    module2.exports = compression2;
+    module2.exports.filter = shouldCompress;
+    var hasBrotliSupport = "createBrotliCompress" in zlib2;
+    var cacheControlNoTransformRegExp = /(?:^|,)\s*?no-transform\s*?(?:,|$)/i;
+    var SUPPORTED_ENCODING = hasBrotliSupport ? ["br", "gzip", "deflate", "identity"] : ["gzip", "deflate", "identity"];
+    var PREFERRED_ENCODING = hasBrotliSupport ? ["br", "gzip"] : ["gzip"];
+    var encodingSupported = ["gzip", "deflate", "identity", "br"];
+    function compression2(options) {
+      var opts = options || {};
+      var optsBrotli = {};
+      if (hasBrotliSupport) {
+        Object.assign(optsBrotli, opts.brotli);
+        var brotliParams = {};
+        brotliParams[zlib2.constants.BROTLI_PARAM_QUALITY] = 4;
+        optsBrotli.params = Object.assign(brotliParams, optsBrotli.params);
+      }
+      var filter = opts.filter || shouldCompress;
+      var threshold = bytes.parse(opts.threshold);
+      var enforceEncoding = opts.enforceEncoding || "identity";
+      if (threshold == null) {
+        threshold = 1024;
+      }
+      return function compression3(req, res, next) {
+        var ended = false;
+        var length;
+        var listeners = [];
+        var stream;
+        var closed = false;
+        var _end = res.end;
+        var _on = res.on;
+        var _write = res.write;
+        res.flush = function flush() {
+          if (stream) {
+            stream.flush();
+          }
+        };
+        res.write = function write(chunk, encoding) {
+          if (ended) {
+            return false;
+          }
+          if (!headersSent(res)) {
+            this.writeHead(this.statusCode);
+          }
+          return stream ? stream.write(toBuffer(chunk, encoding)) : _write.call(this, chunk, encoding);
+        };
+        res.end = function end(chunk, encoding) {
+          if (ended) {
+            return false;
+          }
+          if (!headersSent(res)) {
+            if (!this.getHeader("Content-Length")) {
+              length = chunkLength(chunk, encoding);
+            }
+            this.writeHead(this.statusCode);
+          }
+          if (!stream) {
+            return _end.call(this, chunk, encoding);
+          }
+          ended = true;
+          return chunk ? stream.end(toBuffer(chunk, encoding)) : stream.end();
+        };
+        res.on = function on(type, listener) {
+          if (!listeners || type !== "drain") {
+            return _on.call(this, type, listener);
+          }
+          if (stream) {
+            return stream.on(type, listener);
+          }
+          listeners.push([type, listener]);
+          return this;
+        };
+        function nocompress(msg) {
+          debug("no compression: %s", msg);
+          addListeners(res, _on, listeners);
+          listeners = null;
+        }
+        _on.call(res, "close", function onResponseClose() {
+          closed = true;
+          destroy(stream);
+        });
+        onHeaders(res, function onResponseHeaders() {
+          if (!filter(req, res)) {
+            nocompress("filtered");
+            return;
+          }
+          if (!shouldTransform(req, res)) {
+            nocompress("no transform");
+            return;
+          }
+          vary(res, "Accept-Encoding");
+          if (Number(res.getHeader("Content-Length")) < threshold || length < threshold) {
+            nocompress("size below threshold");
+            return;
+          }
+          var encoding = res.getHeader("Content-Encoding") || "identity";
+          if (encoding !== "identity") {
+            nocompress("already encoded");
+            return;
+          }
+          if (req.method === "HEAD") {
+            nocompress("HEAD request");
+            return;
+          }
+          var negotiator = new Negotiator(req);
+          var method = negotiator.encoding(SUPPORTED_ENCODING, PREFERRED_ENCODING);
+          if (!req.headers["accept-encoding"] && encodingSupported.indexOf(enforceEncoding) !== -1) {
+            method = enforceEncoding;
+          }
+          if (!method || method === "identity") {
+            nocompress("not acceptable");
+            return;
+          }
+          debug("%s compression", method);
+          stream = method === "gzip" ? zlib2.createGzip(opts) : method === "br" ? zlib2.createBrotliCompress(optsBrotli) : zlib2.createDeflate(opts);
+          if (closed) {
+            destroy(stream);
+            stream = null;
+            return;
+          }
+          addListeners(stream, stream.on, listeners);
+          res.setHeader("Content-Encoding", method);
+          res.removeHeader("Content-Length");
+          stream.on("data", function onStreamData(chunk) {
+            if (_write.call(res, chunk) === false) {
+              stream.pause();
+            }
+          });
+          stream.on("end", function onStreamEnd() {
+            _end.call(res);
+          });
+          _on.call(res, "drain", function onResponseDrain() {
+            stream.resume();
+          });
+        });
+        next();
+      };
+    }
+    function addListeners(stream, on, listeners) {
+      for (var i = 0; i < listeners.length; i++) {
+        on.apply(stream, listeners[i]);
+      }
+    }
+    function chunkLength(chunk, encoding) {
+      if (!chunk) {
+        return 0;
+      }
+      return Buffer2.isBuffer(chunk) ? chunk.length : Buffer2.byteLength(chunk, encoding);
+    }
+    function shouldCompress(req, res) {
+      var type = res.getHeader("Content-Type");
+      if (type === void 0 || !compressible(type)) {
+        debug("%s not compressible", type);
+        return false;
+      }
+      return true;
+    }
+    function shouldTransform(req, res) {
+      var cacheControl = res.getHeader("Cache-Control");
+      return !cacheControl || !cacheControlNoTransformRegExp.test(cacheControl);
+    }
+    function toBuffer(chunk, encoding) {
+      return Buffer2.isBuffer(chunk) ? chunk : Buffer2.from(chunk, encoding);
+    }
+    function headersSent(res) {
+      return typeof res.headersSent !== "boolean" ? Boolean(res._header) : res.headersSent;
+    }
+  }
+});
+
 // node_modules/engine.io/build/contrib/base64id.js
 var require_base64id = __commonJS({
   "node_modules/engine.io/build/contrib/base64id.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.base64id = void 0;
-    var crypto8 = require("crypto");
+    var crypto9 = require("crypto");
     var Base64Id = function() {
     };
     Base64Id.prototype.getRandomBytes = function(bytes) {
@@ -23268,12 +24083,12 @@ var require_base64id = __commonJS({
       var self = this;
       bytes = bytes || 12;
       if (bytes > BUFFER_SIZE) {
-        return crypto8.randomBytes(bytes);
+        return crypto9.randomBytes(bytes);
       }
       var bytesInBuffer = Math.floor(BUFFER_SIZE / bytes);
       var threshold = Math.floor(bytesInBuffer * 0.85);
       if (!threshold) {
-        return crypto8.randomBytes(bytes);
+        return crypto9.randomBytes(bytes);
       }
       if (this.bytesBufferIndex == null) {
         this.bytesBufferIndex = -1;
@@ -23285,14 +24100,14 @@ var require_base64id = __commonJS({
       if (this.bytesBufferIndex == -1 || this.bytesBufferIndex > threshold) {
         if (!this.isGeneratingBytes) {
           this.isGeneratingBytes = true;
-          crypto8.randomBytes(BUFFER_SIZE, function(err, bytes2) {
+          crypto9.randomBytes(BUFFER_SIZE, function(err, bytes2) {
             self.bytesBuffer = bytes2;
             self.bytesBufferIndex = 0;
             self.isGeneratingBytes = false;
           });
         }
         if (this.bytesBufferIndex == -1) {
-          return crypto8.randomBytes(bytes);
+          return crypto9.randomBytes(bytes);
         }
       }
       var result = this.bytesBuffer.slice(bytes * this.bytesBufferIndex, bytes * (this.bytesBufferIndex + 1));
@@ -23306,7 +24121,7 @@ var require_base64id = __commonJS({
       }
       this.sequenceNumber = this.sequenceNumber + 1 | 0;
       rand.writeInt32BE(this.sequenceNumber, 11);
-      if (crypto8.randomBytes) {
+      if (crypto9.randomBytes) {
         this.getRandomBytes(12).copy(rand);
       } else {
         [0, 4, 8].forEach(function(i) {
@@ -33896,7 +34711,7 @@ var require_base64id2 = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.base64id = void 0;
-    var crypto8 = require("crypto");
+    var crypto9 = require("crypto");
     var Base64Id = function() {
     };
     Base64Id.prototype.getRandomBytes = function(bytes) {
@@ -33904,12 +34719,12 @@ var require_base64id2 = __commonJS({
       var self = this;
       bytes = bytes || 12;
       if (bytes > BUFFER_SIZE) {
-        return crypto8.randomBytes(bytes);
+        return crypto9.randomBytes(bytes);
       }
       var bytesInBuffer = Math.floor(BUFFER_SIZE / bytes);
       var threshold = Math.floor(bytesInBuffer * 0.85);
       if (!threshold) {
-        return crypto8.randomBytes(bytes);
+        return crypto9.randomBytes(bytes);
       }
       if (this.bytesBufferIndex == null) {
         this.bytesBufferIndex = -1;
@@ -33921,14 +34736,14 @@ var require_base64id2 = __commonJS({
       if (this.bytesBufferIndex == -1 || this.bytesBufferIndex > threshold) {
         if (!this.isGeneratingBytes) {
           this.isGeneratingBytes = true;
-          crypto8.randomBytes(BUFFER_SIZE, function(err, bytes2) {
+          crypto9.randomBytes(BUFFER_SIZE, function(err, bytes2) {
             self.bytesBuffer = bytes2;
             self.bytesBufferIndex = 0;
             self.isGeneratingBytes = false;
           });
         }
         if (this.bytesBufferIndex == -1) {
-          return crypto8.randomBytes(bytes);
+          return crypto9.randomBytes(bytes);
         }
       }
       var result = this.bytesBuffer.slice(bytes * this.bytesBufferIndex, bytes * (this.bytesBufferIndex + 1));
@@ -33942,7 +34757,7 @@ var require_base64id2 = __commonJS({
       }
       this.sequenceNumber = this.sequenceNumber + 1 | 0;
       rand.writeInt32BE(this.sequenceNumber, 11);
-      if (crypto8.randomBytes) {
+      if (crypto9.randomBytes) {
         this.getRandomBytes(12).copy(rand);
       } else {
         [0, 4, 8].forEach(function(i) {
@@ -46725,7 +47540,7 @@ var require_disk = __commonJS({
     var fs5 = require("fs");
     var os3 = require("os");
     var path4 = require("path");
-    var crypto8 = require("crypto");
+    var crypto9 = require("crypto");
     var pipeline3 = require("stream").pipeline;
     var MulterError = require_multer_error();
     var openStreams = /* @__PURE__ */ new WeakMap();
@@ -46737,7 +47552,7 @@ var require_disk = __commonJS({
       if (flush.onClosed) flush.onClosed();
     }
     function getFilename(req, file, cb) {
-      crypto8.randomBytes(16, function(err, raw) {
+      crypto9.randomBytes(16, function(err, raw) {
         cb(err, err ? void 0 : raw.toString("hex"));
       });
     }
@@ -46984,7 +47799,7 @@ var require_main = __commonJS({
     var fs5 = require("fs");
     var path4 = require("path");
     var os3 = require("os");
-    var crypto8 = require("crypto");
+    var crypto9 = require("crypto");
     var TIPS = [
       "\u25C8 encrypted .env [www.dotenvx.com]",
       "\u25C8 secrets for agents [www.dotenvx.com]",
@@ -47228,7 +48043,7 @@ var require_main = __commonJS({
       const authTag = ciphertext.subarray(-16);
       ciphertext = ciphertext.subarray(12, -16);
       try {
-        const aesgcm = crypto8.createDecipheriv("aes-256-gcm", key, nonce);
+        const aesgcm = crypto9.createDecipheriv("aes-256-gcm", key, nonce);
         aesgcm.setAuthTag(authTag);
         return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
       } catch (error2) {
@@ -47299,6 +48114,7 @@ var require_main = __commonJS({
 
 // server.ts
 var import_express = __toESM(require_express2(), 1);
+var import_compression = __toESM(require_compression(), 1);
 var import_vite = require("vite");
 var import_http = require("http");
 
@@ -47309,6 +48125,7 @@ var { Server, Namespace, Socket } = import_dist.default;
 // server.ts
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
+var import_crypto = __toESM(require("crypto"), 1);
 var import_multer = __toESM(require_multer(), 1);
 
 // node_modules/nodemailer/dist/esm/mailer/index.js
@@ -60602,22 +61419,151 @@ var nodemailer_default = nodemailer;
 
 // server.ts
 var import_dotenv = __toESM(require_main(), 1);
-import_dotenv.default.config();
+import_dotenv.default.config({ path: import_path.default.resolve(process.cwd(), ".env"), override: true });
+var SESSION_SECRET = process.env.SESSION_SECRET || import_crypto.default.randomBytes(32).toString("hex");
+var SESSION_COOKIE_NAME = "myrlan_session";
 var uploadsDir = import_path.default.resolve(process.cwd(), "uploads");
 if (!import_fs.default.existsSync(uploadsDir)) {
   import_fs.default.mkdirSync(uploadsDir, { recursive: true });
 }
+var prescriptionsDir = import_path.default.resolve(process.cwd(), "private-prescriptions");
+if (!import_fs.default.existsSync(prescriptionsDir)) {
+  import_fs.default.mkdirSync(prescriptionsDir, { recursive: true });
+}
+var IMAGE_MIME_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+var PRESCRIPTION_MIME_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 var storage = import_multer.default.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadsDir);
   },
   filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + import_path.default.extname(file.originalname));
+    const ext = import_path.default.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, "");
+    const safeExt = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"].includes(ext) ? ext : ".bin";
+    const uniqueSuffix = `${Date.now()}-${import_crypto.default.randomBytes(8).toString("hex")}`;
+    cb(null, `${uniqueSuffix}${safeExt}`);
   }
 });
-var upload = (0, import_multer.default)({ storage });
+var prescriptionStorage = import_multer.default.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, prescriptionsDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = import_path.default.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, "");
+    const safeExt = [".jpg", ".jpeg", ".png", ".webp", ".pdf"].includes(ext) ? ext : ".pdf";
+    const uniqueSuffix = `rx-${Date.now()}-${import_crypto.default.randomBytes(8).toString("hex")}`;
+    cb(null, `${uniqueSuffix}${safeExt}`);
+  }
+});
+var uploadImage = (0, import_multer.default)({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (IMAGE_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Format image non autoris\xE9 (PNG, JPG, WEBP uniquement)."));
+    }
+  }
+});
+var uploadPrescription = (0, import_multer.default)({
+  storage: prescriptionStorage,
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (PRESCRIPTION_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Format d\u2019ordonnance non autoris\xE9 (PDF, PNG, JPG, WEBP uniquement)."));
+    }
+  }
+});
 var dbFilePath = import_path.default.resolve(process.cwd(), "server-db.json");
+function hashPassword(password) {
+  const salt = import_crypto.default.randomBytes(16).toString("hex");
+  const derived = import_crypto.default.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${derived}`;
+}
+function verifyPassword(password, stored) {
+  if (!stored) return { valid: false, needsRehash: false };
+  if (stored.startsWith("scrypt:")) {
+    const parts = stored.split(":");
+    if (parts.length !== 3) return { valid: false, needsRehash: false };
+    const [, salt, hashHex] = parts;
+    const derived = import_crypto.default.scryptSync(password, salt, 64);
+    const storedBuf = Buffer.from(hashHex, "hex");
+    if (derived.length !== storedBuf.length) return { valid: false, needsRehash: false };
+    return { valid: import_crypto.default.timingSafeEqual(derived, storedBuf), needsRehash: false };
+  }
+  const a = Buffer.from(password);
+  const b = Buffer.from(stored);
+  const valid = a.length === b.length && import_crypto.default.timingSafeEqual(a, b);
+  return { valid, needsRehash: valid };
+}
+function signSessionToken(payload, epoch = 1) {
+  const fullPayload = {
+    ...payload,
+    epoch,
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1e3
+  };
+  const data = Buffer.from(JSON.stringify(fullPayload)).toString("base64url");
+  const sig = import_crypto.default.createHmac("sha256", SESSION_SECRET).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+function verifySessionToken(token, expectedEpoch) {
+  try {
+    const [data, sig] = token.split(".");
+    if (!data || !sig) return null;
+    const expectedSig = import_crypto.default.createHmac("sha256", SESSION_SECRET).update(data).digest("base64url");
+    const sigBuf = Buffer.from(sig);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expectedBuf.length || !import_crypto.default.timingSafeEqual(sigBuf, expectedBuf)) {
+      return null;
+    }
+    const payload = JSON.parse(Buffer.from(data, "base64url").toString("utf-8"));
+    if (!payload.exp || payload.exp < Date.now()) return null;
+    if (expectedEpoch !== void 0 && Number(payload.epoch || 1) < expectedEpoch) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+function parseCookies(cookieHeader) {
+  const cookies = {};
+  if (!cookieHeader) return cookies;
+  cookieHeader.split(";").forEach((part) => {
+    const idx = part.indexOf("=");
+    if (idx > -1) {
+      const key = part.slice(0, idx).trim();
+      const val = decodeURIComponent(part.slice(idx + 1).trim());
+      cookies[key] = val;
+    }
+  });
+  return cookies;
+}
+function ensureUserReferralCode(user) {
+  if (user?.referralCode && /^MYR-[A-Z0-9]{4,8}$/.test(String(user.referralCode))) {
+    return String(user.referralCode);
+  }
+  const seed = String(user?.id || user?.email || "myrlan");
+  const code = `MYR-${import_crypto.default.createHash("sha256").update(seed).digest("hex").slice(0, 5).toUpperCase()}`;
+  if (user && typeof user === "object") {
+    user.referralCode = code;
+  }
+  return code;
+}
+function sanitizeUser(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    skinType: user.skinType || "Mixte \xE0 sensible",
+    concerns: user.concerns || [],
+    savedAddresses: user.savedAddresses || [],
+    referralCode: ensureUserReferralCode(user),
+    loyaltyPoints: Number(user.loyaltyPoints || 0),
+    referralsCount: Number(user.referralsCount || 0)
+  };
+}
 var INITIAL_PRODUCTS = [
   {
     id: "p-1",
@@ -60627,11 +61573,13 @@ var INITIAL_PRODUCTS = [
     price: 29.9,
     oldPrice: 38,
     image: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800",
+    rating: 4.9,
+    reviewsCount: 142,
     stock: 24,
     description: "S\xE9rum hautement concentr\xE9 en acide hyaluronique pur de bas et haut poids mol\xE9culaire pour une hydratation intense et un effet repulpant imm\xE9diat.",
     ingredients: ["Aqua", "Sodium Hyaluronate", "Glycerin", "Citric Acid", "Sodium Benzoate"],
     usage: "Appliquer 3 \xE0 4 gouttes matin et soir sur le visage propre avant votre cr\xE8me habituelle.",
-    tags: ["Best-Seller", "Bio", "Sans Paraben"],
+    tags: ["Best-seller", "Bio", "Sans Paraben"],
     volume: "30 ml",
     ean: "3401360215891",
     form: "S\xE9rum aqueux fluide",
@@ -60642,34 +61590,38 @@ var INITIAL_PRODUCTS = [
     id: "p-2",
     name: "Cr\xE8me Solaire Anti-\xC2ge SPF 50+",
     brand: "Solaire Derm",
-    category: "Solaire & Corps",
+    category: "Solaire",
     price: 21.5,
     oldPrice: 26.9,
     image: "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&q=80&w=800",
+    rating: 4.8,
+    reviewsCount: 98,
     stock: 42,
     description: "Protection solaire tr\xE8s haute tol\xE9rance visage et cou. Pr\xE9vient le photo-vieillissement cutan\xE9 et l\u2019apparition des taches brunes.",
     ingredients: ["Aqua", "Homosalate", "Octisalate", "Niacinamide", "Tocopherol"],
     usage: "Appliquer g\xE9n\xE9reusement avant l\u2019exposition au soleil. Renouveler fr\xE9quemment.",
-    tags: ["Bio", "Test\xE9 Dermatologiquement"],
+    tags: ["Bio", "Hypoallerg\xE9nique", "Promo"],
     volume: "50 ml",
     ean: "3401328941205",
     form: "Cr\xE8me protectrice invisible",
-    presentation: "Tube canule pompes 50 ml",
+    presentation: "Tube canule pompe 50 ml",
     contenance: "50 ml"
   },
   {
     id: "p-3",
     name: "Compl\xE9ment Alimentaire Cheveux & Ongles K\xE9ratine",
     brand: "NutriPharma",
-    category: "Compl\xE9ments",
+    category: "Compl\xE9ments Alimentaires",
     price: 24.9,
     oldPrice: 31,
     image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800",
+    rating: 4.7,
+    reviewsCount: 215,
     stock: 18,
     description: "Formule renforc\xE9e en k\xE9ratine, zinc, vitamine B6 et biotine pour stimuler la pousse, renforcer la fibre capillaire et durcir les ongles.",
     ingredients: ["K\xE9ratine hydrolys\xE9e", "L-Cystine", "Zinc Bisglycinate", "Biotine (Vitamine B8)"],
     usage: "2 g\xE9lules par jour le matin avec un grand verre d\u2019eau au cours du repas.",
-    tags: ["Vegan", "Sans Gluten", "Best-Seller"],
+    tags: ["Vegan", "Promo", "Best-seller"],
     volume: "60 g\xE9lules",
     ean: "3760098123452",
     form: "G\xE9lules v\xE9g\xE9tales",
@@ -60680,14 +61632,16 @@ var INITIAL_PRODUCTS = [
     id: "p-4",
     name: "Eau Micellaire Apaisante 3-en-1",
     brand: "DermAura",
-    category: "Hygi\xE8ne & Bain",
+    category: "Hygi\xE8ne & Sant\xE9",
     price: 14.9,
     image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=800",
+    rating: 4.8,
+    reviewsCount: 164,
     stock: 60,
     description: "Nettoie, d\xE9maquille et apaise les peaux sensibles du visage et des yeux en un seul geste sans rincer.",
     ingredients: ["Aqua", "PEG-6 Caprylic/Capric Glycerides", "Disodium EDTA", "Cetrimonium Bromide"],
     usage: "Imbiber un coton et passer d\xE9licatement sur le visage, les yeux et les l\xE8vres.",
-    tags: ["Hypoallerg\xE9nique", "Sans Parfum"],
+    tags: ["Hypoallerg\xE9nique", "Sans Paraben"],
     volume: "400 ml",
     ean: "3401509823411",
     form: "Solution micellaire limpide",
@@ -60698,15 +61652,17 @@ var INITIAL_PRODUCTS = [
     id: "p-5",
     name: "Huile S\xE8che Nourrissante Visage, Corps & Cheveux",
     brand: "PharmaBotanica",
-    category: "Solaire & Corps",
+    category: "Bio & Naturel",
     price: 26,
     oldPrice: 32,
     image: "https://images.unsplash.com/photo-1608248597359-f53835f42629?auto=format&fit=crop&q=80&w=800",
+    rating: 4.9,
+    reviewsCount: 128,
     stock: 35,
     description: "Enrichie en huiles v\xE9g\xE9tales pr\xE9cieuses (Argan, Amande douce, Macadamia). Nourrit intens\xE9ment sans laisser de film gras.",
     ingredients: ["Helianthus Annuus Seed Oil", "Argania Spinosa Kernel Oil", "Prunus Amygdalus Dulcis Oil", "Tocopherol"],
     usage: "S\u2019utilise toute l\u2019ann\xE9e sur le visage, le corps et les cheveux.",
-    tags: ["Bio", "99% Naturel"],
+    tags: ["Bio", "Vegan", "Promo"],
     volume: "100 ml",
     ean: "3700543219876",
     form: "Huile s\xE8che vaporisateur",
@@ -60717,14 +61673,16 @@ var INITIAL_PRODUCTS = [
     id: "p-6",
     name: "Gel Douche Surgras Dermoprotecteur",
     brand: "DermAura",
-    category: "Hygi\xE8ne & Bain",
+    category: "Corps & Cheveux",
     price: 9.9,
     image: "https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?auto=format&fit=crop&q=80&w=800",
+    rating: 4.6,
+    reviewsCount: 83,
     stock: 80,
     description: "Nettoie en douceur et prot\xE8ge les peaux s\xE8ches et sensibles de toute la famille. pH neutre pour la peau.",
     ingredients: ["Aqua", "Sodium Laureth Sulfate", "Glycerin", "Coco-Glucoside", "Citric Acid"],
     usage: "Appliquer sur peau mouill\xE9e, faire mousser d\xE9licatement puis rincer abondamment.",
-    tags: ["Familial", "Sans Savon"],
+    tags: ["Hypoallerg\xE9nique", "Sans Paraben"],
     volume: "500 ml",
     ean: "3401109283746",
     form: "Gel moussant onctueux",
@@ -60737,66 +61695,943 @@ var INITIAL_ORDERS = [
     id: "ORD-9842",
     date: "2026-11-19 14:20",
     items: [{ product: INITIAL_PRODUCTS[0], quantity: 1 }],
+    subtotal: 29.9,
+    discountAmount: 0,
+    shippingFee: 0,
     totalAmount: 29.9,
     shippingAddress: {
-      fullName: "Sophie Martin",
-      email: "sophie.martin@example.com",
+      fullName: "Marie Dupont",
+      email: "marie.dupont@example.com",
       phone: "06 12 34 56 78",
-      address: "15 rue de la R\xE9publique",
-      city: "Lyon",
-      postalCode: "69002",
+      address: "6 boulevard G\xE9n\xE9ral Leclerc",
+      city: "Draguignan",
+      postalCode: "83300",
       country: "France"
     },
     paymentMethod: "card",
     carrier: "colissimo",
     status: "Exp\xE9di\xE9",
     trackingNumber: "6A00984223190",
-    loyaltyPointsEarned: 29
+    loyaltyPointsEarned: 29,
+    userId: "usr-3"
   }
 ];
 var INITIAL_USERS = [
-  { id: "usr-1", name: "Administrateur Myrlan", email: "aaa@gmail.com", role: "admin", password: "123456789" },
-  { id: "usr-2", name: "Admin Secondaire", email: "admin2@myrlan.fr", role: "admin", password: "admin" },
-  { id: "usr-3", name: "Marie Dupont", email: "marie.dupont@example.com", role: "customer", password: "password" }
+  { id: "usr-1", name: "Administrateur Myrlan", email: "myrlan@mrlan.com", role: "admin", password: hashPassword("123456789"), createdAt: "2026-01-10", savedAddresses: [] },
+  { id: "usr-2", name: "Administrateur Officiel", email: "official.fr06@gmail.com", role: "admin", password: hashPassword("123456789"), createdAt: "2026-01-12", savedAddresses: [] },
+  {
+    id: "usr-3",
+    name: "Marie Dupont",
+    email: "marie.dupont@example.com",
+    role: "customer",
+    password: hashPassword("password"),
+    createdAt: "2026-02-15",
+    skinType: "Mixte \xE0 sensible",
+    concerns: ["Hydratation", "\xC9clat du teint"],
+    savedAddresses: [
+      {
+        id: "addr-1",
+        label: "Domicile",
+        fullName: "Marie Dupont",
+        phone: "06 12 34 56 78",
+        address: "6 boulevard G\xE9n\xE9ral Leclerc",
+        city: "Draguignan",
+        postalCode: "83300",
+        country: "France",
+        isDefault: true
+      }
+    ]
+  }
 ];
+var INITIAL_PROMOS = [
+  {
+    id: "promo-1",
+    code: "MYRLANE10",
+    discountPercent: 10,
+    minOrder: 0,
+    description: "10% de r\xE9duction imm\xE9diate sur toute la boutique",
+    active: true
+  },
+  {
+    id: "promo-2",
+    code: "BIENVENUE15",
+    discountPercent: 15,
+    minOrder: 60,
+    description: "15% offerts d\xE8s 60 \u20AC d\u2019achats",
+    active: true
+  },
+  {
+    id: "promo-3",
+    code: "SANTE20",
+    discountPercent: 20,
+    minOrder: 90,
+    description: "20% sur votre cure bien-\xEAtre d\xE8s 90 \u20AC",
+    active: true
+  }
+];
+var DEFAULT_ROBOTS_TXT = `User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /compte
+Disallow: /commandes
+Disallow: /reset-password
+Disallow: /api/
+
+Sitemap: {{SITEMAP_URL}}`;
+var DEFAULT_WEBMASTER_CONFIG = {
+  siteTitle: "Myrlan - Parapharmacie & Soins en Ligne",
+  siteDescription: "Votre parapharmacie en ligne de confiance : soins dermo-cosm\xE9tiques, compl\xE9ments alimentaires, conseils de pharmaciens et Click & Collect.",
+  canonicalBaseUrl: "",
+  ogImageUrl: "",
+  googleSiteVerification: "",
+  bingSiteVerification: "",
+  gaMeasurementId: "",
+  robotsTxt: DEFAULT_ROBOTS_TXT,
+  sitemapIncludeProducts: true,
+  sitemapChangeFreq: "weekly",
+  enablePharmacyJsonLd: true,
+  enableProductJsonLd: true,
+  redirects: [],
+  updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+};
+var HERO_PRESET_IDS = ["officine_navy", "botanique_sauge", "clinique_ivoire", "solaire_dore"];
+var DEFAULT_DESIGN_CONFIG = {
+  activeHeroId: "officine_navy",
+  customBadge: "",
+  customTitle: "",
+  customSubtitle: "",
+  customPrimaryCtaLabel: "",
+  showTrustBar: true,
+  updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+};
+var TODAY_ISO = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+var DEFAULT_EMAIL_TEMPLATES = [
+  {
+    id: "order_confirmed",
+    name: "Commande confirm\xE9e",
+    category: "Commandes",
+    statusLabel: "Confirm\xE9e / En pr\xE9paration",
+    triggerEvent: "D\xE9clench\xE9 automatiquement d\xE8s la validation du paiement ou de la commande.",
+    enabled: true,
+    subject: "Confirmation de votre commande {{orderId}} \u2014 Myrlan Officine",
+    heading: "Merci {{patientName}}, votre commande est confirm\xE9e !",
+    body: "Nous avons bien re\xE7u votre commande {{orderId}} d\u2019un montant de {{totalAmount}}.\n\nNos pr\xE9parateurs en pharmacie v\xE9rifient actuellement vos produits avant exp\xE9dition via {{carrier}}.\nNum\xE9ro de suivi attribu\xE9 : {{trackingNumber}}.",
+    ctaLabel: "Suivre ma commande",
+    ctaPath: "/commandes",
+    accentColor: "#1d4ed8",
+    footerNote: "Myrlan Parapharmacie Agr\xE9\xE9e \u2014 Des questions ? R\xE9pondez directement \xE0 notre pharmacienne depuis votre espace client.",
+    availableVariables: ["patientName", "orderId", "totalAmount", "carrier", "trackingNumber", "orderDate"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "order_shipped",
+    name: "Commande exp\xE9di\xE9e",
+    category: "Commandes",
+    statusLabel: "Exp\xE9di\xE9",
+    triggerEvent: "Envoy\xE9 lorsque le statut de commande passe \xE0 \xAB Exp\xE9di\xE9 \xBB dans le tableau de bord.",
+    enabled: true,
+    subject: "Votre colis {{orderId}} est en route ({{trackingNumber}})",
+    heading: "Bonne nouvelle {{patientName}}, votre colis vient d\u2019\xEAtre exp\xE9di\xE9 !",
+    body: "Votre commande {{orderId}} a quitt\xE9 notre officine et a \xE9t\xE9 remise au transporteur ({{carrier}}).\n\nVous pouvez suivre son acheminement en temps r\xE9el avec la r\xE9f\xE9rence : {{trackingNumber}}.",
+    ctaLabel: "Suivre mon colis",
+    ctaPath: "/commandes",
+    accentColor: "#0284c7",
+    footerNote: "Pensez \xE0 v\xE9rifier votre bo\xEEte mail ou SMS pour les alertes du livreur.",
+    availableVariables: ["patientName", "orderId", "carrier", "trackingNumber", "totalAmount"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "order_delivered",
+    name: "Commande livr\xE9e",
+    category: "Commandes",
+    statusLabel: "Livr\xE9",
+    triggerEvent: "Envoy\xE9 lorsque la commande est marqu\xE9e comme \xAB Livr\xE9 \xBB.",
+    enabled: true,
+    subject: "Commande {{orderId}} livr\xE9e \u2014 Conseils & fid\xE9lit\xE9 Myrlan",
+    heading: "Votre commande {{orderId}} a bien \xE9t\xE9 livr\xE9e",
+    body: "Bonjour {{patientName}},\n\nNous esp\xE9rons que vos soins vous donneront enti\xE8re satisfaction. Votre achat vous a permis de cumuler {{loyaltyPoints}} points fid\xE9lit\xE9 sur votre compte.\n\nNos pharmaciens restent \xE0 votre \xE9coute dans le tchat en ligne pour tout conseil d\u2019application.",
+    ctaLabel: "Consulter mes commandes",
+    ctaPath: "/commandes",
+    accentColor: "#047857",
+    footerNote: "Retours gratuits sous 14 jours sur les produits scell\xE9s non ouverts.",
+    availableVariables: ["patientName", "orderId", "loyaltyPoints", "totalAmount"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "appointment_confirmed",
+    name: "Rendez-vous confirm\xE9",
+    category: "Rendez-vous",
+    statusLabel: "Confirm\xE9",
+    triggerEvent: "Envoy\xE9 automatiquement lorsqu\u2019un patient r\xE9serve un cr\xE9neau ou qu\u2019un rendez-vous est confirm\xE9.",
+    enabled: true,
+    subject: "Rendez-vous confirm\xE9 le {{appointmentDate}} \xE0 {{appointmentSlot}} \u2014 Myrlan",
+    heading: "Votre rendez-vous officinal {{appointmentId}} est confirm\xE9",
+    body: "Bonjour {{patientName}},\n\nNous confirmons votre rendez-vous pour : {{serviceLabel}}.\nDate & heure : le {{appointmentDate}} \xE0 {{appointmentSlot}}.\nFormat : {{appointmentFormat}}.\n\nMerci de vous pr\xE9senter 5 minutes avant l\u2019horaire pr\xE9vu (ou de cliquer sur votre lien visio si applicable).",
+    ctaLabel: "G\xE9rer mes rendez-vous",
+    ctaPath: "/rendez-vous",
+    accentColor: "#1d4ed8",
+    footerNote: "En cas d\u2019emp\xEAchement, vous pouvez annuler ou d\xE9placer votre cr\xE9neau jusqu\u2019\xE0 2h avant.",
+    availableVariables: ["patientName", "appointmentId", "serviceLabel", "appointmentDate", "appointmentSlot", "appointmentFormat"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "appointment_completed",
+    name: "Rendez-vous termin\xE9",
+    category: "Rendez-vous",
+    statusLabel: "Termin\xE9",
+    triggerEvent: "Envoy\xE9 lorsque le pharmacien cl\xF4ture le rendez-vous au statut \xAB Termin\xE9 \xBB.",
+    enabled: true,
+    subject: "Merci pour votre visite ({{appointmentId}}) \u2014 Suivi Myrlan",
+    heading: "Compte-rendu de votre entretien officinal",
+    body: "Bonjour {{patientName}},\n\nVotre rendez-vous ({{serviceLabel}}) du {{appointmentDate}} \xE0 {{appointmentSlot}} est d\xE9sormais termin\xE9.\n\nNote du pharmacien : {{pharmacistNote}}\n\nNotre \xE9quipe reste disponible pour adapter votre routine si besoin.",
+    ctaLabel: "Acc\xE9der \xE0 mon dossier",
+    ctaPath: "/rendez-vous",
+    accentColor: "#047857",
+    footerNote: "Document informatif confidentiel \xE9mis par l\u2019\xE9quipe officinale Myrlan.",
+    availableVariables: ["patientName", "appointmentId", "serviceLabel", "appointmentDate", "appointmentSlot", "pharmacistNote"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "appointment_cancelled",
+    name: "Rendez-vous annul\xE9",
+    category: "Rendez-vous",
+    statusLabel: "Annul\xE9",
+    triggerEvent: "Envoy\xE9 lorsqu\u2019un rendez-vous est annul\xE9 par le patient ou par l\u2019officine.",
+    enabled: true,
+    subject: "Annulation du rendez-vous {{appointmentId}} du {{appointmentDate}}",
+    heading: "Votre rendez-vous du {{appointmentDate}} a \xE9t\xE9 annul\xE9",
+    body: "Bonjour {{patientName}},\n\nLe rendez-vous {{appointmentId}} ({{serviceLabel}}) initialement pr\xE9vu le {{appointmentDate}} \xE0 {{appointmentSlot}} a bien \xE9t\xE9 annul\xE9.\n\nNote associ\xE9e : {{pharmacistNote}}\nVous pouvez r\xE9server un autre cr\xE9neau \xE0 tout moment en ligne.",
+    ctaLabel: "Reprendre rendez-vous",
+    ctaPath: "/rendez-vous",
+    accentColor: "#be123c",
+    footerNote: "Besoin d\u2019un cr\xE9neau d\u2019urgence ? Contactez directement l\u2019officine.",
+    availableVariables: ["patientName", "appointmentId", "serviceLabel", "appointmentDate", "appointmentSlot", "pharmacistNote"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "prescription_ready",
+    name: "Ordonnance valid\xE9e / pr\xEAte",
+    category: "Ordonnances",
+    statusLabel: "Valid\xE9e / Pr\xEAte en officine",
+    triggerEvent: "Envoy\xE9 quand le pharmacien passe l\u2019ordonnance \xE0 \xAB Valid\xE9e par le pharmacien \xBB ou \xAB Pr\xEAte en officine \xBB.",
+    enabled: true,
+    subject: "Votre ordonnance {{prescriptionId}} est {{prescriptionStatus}}",
+    heading: "Mise \xE0 jour de votre ordonnance {{prescriptionId}}",
+    body: "Bonjour {{patientName}},\n\nVotre ordonnance vient de passer au statut : {{prescriptionStatus}}.\nMode choisi : {{deliveryMode}}.\n\nCommentaire du pharmacien : {{pharmacistNote}}\n\nMerci de vous munir de l\u2019original papier et de votre carte Vitale lors du retrait.",
+    ctaLabel: "Suivre mon ordonnance",
+    ctaPath: "/ordonnance",
+    accentColor: "#047857",
+    footerNote: "Traitement m\xE9dical s\xE9curis\xE9 et strictement confidentiel \u2014 Officine Myrlan.",
+    availableVariables: ["patientName", "prescriptionId", "prescriptionStatus", "deliveryMode", "pharmacistNote"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "prescription_refused",
+    name: "Ordonnance refus\xE9e / \xE0 corriger",
+    category: "Ordonnances",
+    statusLabel: "Refus\xE9e",
+    triggerEvent: "Envoy\xE9 quand une ordonnance est marqu\xE9e \xAB Refus\xE9e \xBB (document illisible, expir\xE9 ou incomplet).",
+    enabled: true,
+    subject: "Action requise sur votre ordonnance {{prescriptionId}}",
+    heading: "Votre ordonnance {{prescriptionId}} n\xE9cessite une v\xE9rification",
+    body: "Bonjour {{patientName}},\n\nNous n\u2019avons pas pu valider votre ordonnance transmise en ligne.\nMotif indiqu\xE9 par le pharmacien : {{pharmacistNote}}\n\nVous pouvez d\xE9poser une nouvelle photo lisible ou nous contacter sur le tchat patient.",
+    ctaLabel: "D\xE9poser un nouveau document",
+    ctaPath: "/ordonnance",
+    accentColor: "#b45309",
+    footerNote: "La s\xE9curit\xE9 de dispensation reste notre priorit\xE9 absolue.",
+    availableVariables: ["patientName", "prescriptionId", "prescriptionStatus", "pharmacistNote"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "back_in_stock",
+    name: "Alerte Retour en Stock",
+    category: "Catalogue & CRM",
+    statusLabel: "Disponible en officine",
+    triggerEvent: "Envoy\xE9 automatiquement aux clients en attente d\xE8s que le stock d\u2019un produit repasse au-dessus de 0.",
+    enabled: true,
+    subject: "{{productName}} est de nouveau en stock \u2014 Myrlan Officine",
+    heading: "Bonne nouvelle ! {{productName}} est de retour",
+    body: "Bonjour,\n\nLe soin {{productName}} ({{productBrand}}) que vous suiviez vient d\u2019\xEAtre r\xE9approvisionn\xE9 dans notre pharmacie au tarif de {{productPrice}}.\n\nQuantit\xE9 disponible actuellement : {{stockCount}} unit\xE9(s). Commandez d\xE8s maintenant avant la prochaine rupture.",
+    ctaLabel: "Commander le produit",
+    ctaPath: "{{productPath}}",
+    accentColor: "#0284c7",
+    footerNote: "Vous recevez cet e-mail car vous avez activ\xE9 une alerte retour en stock sur Myrlan.",
+    availableVariables: ["productName", "productBrand", "productPrice", "stockCount", "productPath"],
+    updatedAt: TODAY_ISO
+  },
+  {
+    id: "admin_new_customer",
+    name: "Nouveau Client Inscrit (Admin)",
+    category: "Alertes Admin",
+    statusLabel: "Nouvelle inscription",
+    triggerEvent: "Envoy\xE9 automatiquement \xE0 l\u2019administrateur d\xE8s qu\u2019un nouveau client cr\xE9e un compte sur le site.",
+    enabled: true,
+    recipientEmail: "myrlan@myrlan.com",
+    subject: "[Nouveau client] {{customerName}} vient de s\u2019inscrire \u2014 Myrlan Officine",
+    heading: "Nouvelle inscription client sur la boutique",
+    body: "Bonjour,\n\nUn nouveau client vient de cr\xE9er un compte sur Myrlan Parapharmacie :\n\n\u2022 Nom complet : {{customerName}}\n\u2022 Adresse e-mail : {{customerEmail}}\n\u2022 Profil de peau : {{skinType}}\n\u2022 Date d\u2019inscription : {{registrationDate}}\n\u2022 Identifiant client : {{customerId}}\n\nTotal actuel de clients inscrits : {{totalCustomers}}.\n\nVous pouvez consulter son profil et son historique depuis le tableau de bord administrateur.",
+    ctaLabel: "Ouvrir le tableau de bord Admin",
+    ctaPath: "/admin",
+    accentColor: "#1d4ed8",
+    footerNote: "Notification interne automatique Myrlan Officine \u2014 destin\xE9e \xE0 l\u2019\xE9quipe administrateur.",
+    availableVariables: ["customerName", "customerEmail", "skinType", "registrationDate", "customerId", "totalCustomers"],
+    updatedAt: TODAY_ISO
+  }
+];
+var SAMPLE_EMAIL_VARIABLES = {
+  patientName: "Camille Laurent",
+  orderId: "ORD-8421",
+  totalAmount: "64.40 \u20AC",
+  carrier: "Colissimo Suivi",
+  trackingNumber: "FR894210554",
+  orderDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+  loyaltyPoints: "64",
+  appointmentId: "RDV-3092",
+  serviceLabel: "Consultation Dermo-Cosm\xE9tique Sur-Mesure",
+  appointmentDate: new Date(Date.now() + 2 * 864e5).toISOString().split("T")[0],
+  appointmentSlot: "14:30",
+  appointmentFormat: "\xC0 l\u2019officine",
+  pharmacistNote: "Tout est conforme. Pensez \xE0 apporter votre routine actuelle.",
+  prescriptionId: "RX-5120",
+  prescriptionStatus: "Pr\xEAte en officine",
+  deliveryMode: "Retrait Click & Collect",
+  productName: "S\xE9rum Booster Acide Hyaluronique Pur",
+  productBrand: "La Roche-Glow",
+  productPrice: "29.90 \u20AC",
+  stockCount: "18",
+  productPath: "/produit/p-1",
+  customerName: "Sophie Mercier",
+  customerEmail: "sophie.mercier@exemple.fr",
+  skinType: "Mixte \xE0 sensible",
+  registrationDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+  customerId: "usr-17482091",
+  totalCustomers: "128"
+};
+function escapeHtmlForEmail(raw) {
+  return String(raw ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function interpolateTemplateVars(templateStr, vars, escapeHtml = false) {
+  return String(templateStr || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => {
+    const val = vars[key] !== void 0 && vars[key] !== "" ? String(vars[key]) : `\u2014`;
+    return escapeHtml ? escapeHtmlForEmail(val) : val;
+  });
+}
+function renderEmailTemplate(tpl, vars, baseUrl) {
+  const safeColor = /^#[0-9a-fA-F]{6}$/.test(String(tpl.accentColor || "")) ? tpl.accentColor : "#1d4ed8";
+  const subject = interpolateTemplateVars(tpl.subject, vars, false);
+  const headingText = interpolateTemplateVars(tpl.heading, vars, false);
+  const bodyText = interpolateTemplateVars(tpl.body, vars, false);
+  const ctaLabel = interpolateTemplateVars(tpl.ctaLabel, vars, false);
+  const footerText = interpolateTemplateVars(tpl.footerNote, vars, false);
+  const safePath = String(tpl.ctaPath || "/").startsWith("/") ? tpl.ctaPath : "/";
+  const ctaUrl = `${baseUrl}${safePath}`;
+  const headingHtml = interpolateTemplateVars(tpl.heading, vars, true);
+  const bodyParagraphsHtml = interpolateTemplateVars(tpl.body, vars, true).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px 0;color:#334155;font-size:14px;line-height:1.6;">${p.replace(/\n/g, "<br/>")}</p>`).join("");
+  const ctaLabelHtml = escapeHtmlForEmail(ctaLabel);
+  const footerHtml = escapeHtmlForEmail(footerText);
+  const statusHtml = escapeHtmlForEmail(String(tpl.statusLabel || ""));
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8" /><title>${escapeHtmlForEmail(subject)}</title></head>
+<body style="margin:0;padding:24px 12px;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+    <tr>
+      <td style="background:${safeColor};padding:20px 24px;color:#ffffff;">
+        <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">Myrlan Officine \xB7 ${statusHtml}</div>
+        <div style="font-size:20px;font-weight:800;margin-top:6px;line-height:1.3;">${headingHtml}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:24px;">
+        ${bodyParagraphsHtml}
+        <div style="margin-top:24px;">
+          <a href="${escapeHtmlForEmail(ctaUrl)}" style="display:inline-block;background:${safeColor};color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:12px 22px;border-radius:10px;">${ctaLabelHtml}</a>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px;line-height:1.5;">
+        ${footerHtml}
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  const text = `${headingText}
+
+${bodyText}
+
+${ctaLabel} : ${ctaUrl}
+
+---
+${footerText}`;
+  return { subject, html, text };
+}
+var PUBLIC_STOREFRONT_ROUTES = [
+  { path: "/", label: "Accueil & Catalogue", priority: "1.0", changefreq: "daily" },
+  { path: "/diagnostic", label: "Diagnostic Peau & Sant\xE9", priority: "0.9", changefreq: "weekly" },
+  { path: "/rendez-vous", label: "Rendez-vous Officinal", priority: "0.9", changefreq: "weekly" },
+  { path: "/marques", label: "Nos Marques", priority: "0.8", changefreq: "weekly" },
+  { path: "/promotions", label: "Promotions", priority: "0.8", changefreq: "daily" },
+  { path: "/ordonnance", label: "Ordonnance en ligne", priority: "0.8", changefreq: "weekly" },
+  { path: "/conseils", label: "Conseils Sant\xE9", priority: "0.8", changefreq: "weekly" },
+  { path: "/a-propos", label: "L\u2019Officine & Agr\xE9ments", priority: "0.7", changefreq: "monthly" },
+  { path: "/contact", label: "Contact & Officine", priority: "0.7", changefreq: "monthly" },
+  { path: "/cgv", label: "CGV", priority: "0.4", changefreq: "yearly" },
+  { path: "/livraison-retours", label: "Livraison & Retours", priority: "0.5", changefreq: "monthly" },
+  { path: "/confidentialite", label: "Politique de confidentialit\xE9", priority: "0.4", changefreq: "yearly" },
+  { path: "/mentions-legales", label: "Mentions l\xE9gales", priority: "0.4", changefreq: "yearly" }
+];
+var APPOINTMENT_SERVICES = {
+  vaccination: { label: "Vaccination Officinale (Grippe, COVID, Rappel)", durationMinutes: 15 },
+  trod_angine: { label: "Test Rapide Angine (TROD) ou COVID", durationMinutes: 15 },
+  bilan_medication: { label: "Bilan Partag\xE9 de M\xE9dication", durationMinutes: 30 },
+  conseil_dermo: { label: "Consultation Dermo-Cosm\xE9tique Sur-Mesure", durationMinutes: 20 },
+  suivi_maternite: { label: "Accompagnement Maternit\xE9 & Nourrisson", durationMinutes: 20 }
+};
+var APPOINTMENT_TIME_SLOTS = [
+  "09:00",
+  "09:30",
+  "10:00",
+  "10:30",
+  "11:00",
+  "11:30",
+  "14:00",
+  "14:30",
+  "15:00",
+  "15:30",
+  "16:00",
+  "16:30",
+  "17:00",
+  "17:30"
+];
+function escapeXml(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+function normalizeInternalPath(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return null;
+  const [withoutQuery] = trimmed.split(/[?#]/);
+  if (!withoutQuery) return "/";
+  if (withoutQuery.length > 1 && withoutQuery.endsWith("/")) {
+    return withoutQuery.slice(0, -1);
+  }
+  return withoutQuery;
+}
+function resolveBaseUrl(req, webmaster) {
+  const configured = String(webmaster?.canonicalBaseUrl || "").trim().replace(/\/+$/, "");
+  if (/^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/.test(configured)) {
+    return configured;
+  }
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/+$/, "");
+  }
+  const protoHeader = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+  const hostHeader = String(req.headers["x-forwarded-host"] || req.get("host") || "localhost:3000").split(",")[0].trim();
+  return `${protoHeader}://${hostHeader}`;
+}
+function buildSitemapXml(db, baseUrl) {
+  const wm = db.webmaster || DEFAULT_WEBMASTER_CONFIG;
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const lastMod = wm.updatedAt || today;
+  const productFreq = ["daily", "weekly", "monthly"].includes(wm.sitemapChangeFreq) ? wm.sitemapChangeFreq : "weekly";
+  const urls = PUBLIC_STOREFRONT_ROUTES.map((r) => ({
+    loc: `${baseUrl}${r.path === "/" ? "/" : r.path}`,
+    lastmod: lastMod,
+    changefreq: r.changefreq,
+    priority: r.priority
+  }));
+  if (wm.sitemapIncludeProducts !== false && Array.isArray(db.products)) {
+    for (const p of db.products) {
+      if (!p?.id) continue;
+      urls.push({
+        loc: `${baseUrl}/produit/${encodeURIComponent(String(p.id))}`,
+        lastmod: lastMod,
+        changefreq: productFreq,
+        priority: "0.9"
+      });
+    }
+  }
+  const entries = urls.map((u) => `  <url>
+    <loc>${escapeXml(u.loc)}</loc>
+    <lastmod>${escapeXml(u.lastmod)}</lastmod>
+    <changefreq>${escapeXml(u.changefreq)}</changefreq>
+    <priority>${escapeXml(u.priority)}</priority>
+  </url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries}
+</urlset>`;
+}
+function buildRobotsTxt(db, baseUrl) {
+  const raw = String(db.webmaster?.robotsTxt || DEFAULT_ROBOTS_TXT);
+  const sitemapUrl = `${baseUrl}/sitemap.xml`;
+  if (raw.includes("{{SITEMAP_URL}}")) {
+    return raw.replace(/\{\{SITEMAP_URL\}\}/g, sitemapUrl);
+  }
+  return raw;
+}
+var DEFAULT_RESTOCK_CONFIG = {
+  criticalThreshold: 5,
+  targetStock: 25,
+  supplierEmail: "approvisionnement@grossiste-pharma.fr",
+  supplierName: "Grossiste R\xE9partiteur Myrlan",
+  autoNotifyOnOrder: true,
+  updatedAt: TODAY_ISO
+};
+var DEFAULT_MAINTENANCE_CONFIG = {
+  enabled: false,
+  message: "Notre officine fait peau neuve pour mieux vous servir. Nous serons de retour tr\xE8s prochainement.",
+  updatedAt: TODAY_ISO
+};
+var cachedDb = null;
+var cachedDbMtimeMs = -1;
 function getDatabase() {
   if (!import_fs.default.existsSync(dbFilePath)) {
     const initialDb = {
       products: INITIAL_PRODUCTS,
       orders: INITIAL_ORDERS,
-      users: INITIAL_USERS
+      users: INITIAL_USERS,
+      promoCodes: INITIAL_PROMOS,
+      prescriptions: [],
+      contactMessages: [],
+      chatSessions: [],
+      appointments: [],
+      securityLogs: [],
+      securityConfig: {
+        tokenEpoch: 1,
+        maxCodGuestAmount: 250,
+        maxOrderQtyPerItem: 10,
+        maxOrderTotalItems: 30,
+        officialDomain: ""
+      },
+      webmaster: { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] },
+      design: { ...DEFAULT_DESIGN_CONFIG },
+      emailTemplates: DEFAULT_EMAIL_TEMPLATES.map((t) => ({ ...t })),
+      emailLogs: [],
+      resetTokens: [],
+      stockAlerts: [],
+      newsletterSubscribers: [],
+      emailCampaigns: [],
+      reviews: [],
+      referrals: [],
+      restockConfig: { ...DEFAULT_RESTOCK_CONFIG },
+      restockNotifications: [],
+      restockEmails: [],
+      maintenanceConfig: { ...DEFAULT_MAINTENANCE_CONFIG }
     };
-    import_fs.default.writeFileSync(dbFilePath, JSON.stringify(initialDb, null, 2));
+    saveDatabase(initialDb);
     return initialDb;
   }
   try {
+    const stat = import_fs.default.statSync(dbFilePath);
+    if (cachedDb && stat.mtimeMs === cachedDbMtimeMs) {
+      return cachedDb;
+    }
     const data = import_fs.default.readFileSync(dbFilePath, "utf-8");
-    return JSON.parse(data);
-  } catch (err) {
+    const parsed = JSON.parse(data);
+    let dirty = false;
+    if (!Array.isArray(parsed.products)) {
+      parsed.products = INITIAL_PRODUCTS;
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.orders)) {
+      parsed.orders = INITIAL_ORDERS;
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.users)) {
+      parsed.users = INITIAL_USERS;
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.promoCodes)) {
+      parsed.promoCodes = INITIAL_PROMOS;
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.prescriptions)) {
+      parsed.prescriptions = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.contactMessages)) {
+      parsed.contactMessages = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.chatSessions)) {
+      parsed.chatSessions = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.appointments)) {
+      parsed.appointments = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.securityLogs)) {
+      parsed.securityLogs = [];
+      dirty = true;
+    }
+    if (!parsed.securityConfig || typeof parsed.securityConfig !== "object") {
+      parsed.securityConfig = {
+        tokenEpoch: 1,
+        maxCodGuestAmount: 250,
+        maxOrderQtyPerItem: 10,
+        maxOrderTotalItems: 30,
+        officialDomain: ""
+      };
+      dirty = true;
+    }
+    if (!parsed.webmaster || typeof parsed.webmaster !== "object") {
+      parsed.webmaster = { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] };
+      dirty = true;
+    } else {
+      parsed.webmaster = {
+        ...DEFAULT_WEBMASTER_CONFIG,
+        ...parsed.webmaster,
+        redirects: Array.isArray(parsed.webmaster.redirects) ? parsed.webmaster.redirects : []
+      };
+    }
+    if (!parsed.design || typeof parsed.design !== "object") {
+      parsed.design = { ...DEFAULT_DESIGN_CONFIG };
+      dirty = true;
+    } else {
+      const validHero = HERO_PRESET_IDS.includes(parsed.design.activeHeroId) ? parsed.design.activeHeroId : DEFAULT_DESIGN_CONFIG.activeHeroId;
+      parsed.design = {
+        ...DEFAULT_DESIGN_CONFIG,
+        ...parsed.design,
+        activeHeroId: validHero,
+        showTrustBar: parsed.design.showTrustBar !== false
+      };
+    }
+    if (!Array.isArray(parsed.emailTemplates) || parsed.emailTemplates.length === 0) {
+      parsed.emailTemplates = DEFAULT_EMAIL_TEMPLATES.map((t) => ({ ...t }));
+      dirty = true;
+    } else {
+      const existingIds = new Set(parsed.emailTemplates.map((t) => t.id));
+      for (const defTpl of DEFAULT_EMAIL_TEMPLATES) {
+        if (!existingIds.has(defTpl.id)) {
+          parsed.emailTemplates.push({ ...defTpl });
+          dirty = true;
+        }
+      }
+    }
+    if (!Array.isArray(parsed.emailLogs)) {
+      parsed.emailLogs = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.resetTokens)) {
+      parsed.resetTokens = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.stockAlerts)) {
+      parsed.stockAlerts = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.newsletterSubscribers)) {
+      parsed.newsletterSubscribers = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.emailCampaigns)) {
+      parsed.emailCampaigns = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.reviews)) {
+      parsed.reviews = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.referrals)) {
+      parsed.referrals = [];
+      dirty = true;
+    }
+    if (!parsed.restockConfig || typeof parsed.restockConfig !== "object") {
+      parsed.restockConfig = { ...DEFAULT_RESTOCK_CONFIG };
+      dirty = true;
+    } else {
+      parsed.restockConfig = {
+        ...DEFAULT_RESTOCK_CONFIG,
+        ...parsed.restockConfig
+      };
+    }
+    if (!parsed.maintenanceConfig || typeof parsed.maintenanceConfig !== "object") {
+      parsed.maintenanceConfig = { ...DEFAULT_MAINTENANCE_CONFIG };
+      dirty = true;
+    } else {
+      parsed.maintenanceConfig = {
+        ...DEFAULT_MAINTENANCE_CONFIG,
+        ...parsed.maintenanceConfig
+      };
+    }
+    if (!Array.isArray(parsed.restockNotifications)) {
+      parsed.restockNotifications = [];
+      dirty = true;
+    }
+    if (!Array.isArray(parsed.restockEmails)) {
+      parsed.restockEmails = [];
+      dirty = true;
+    }
+    if (Array.isArray(parsed.users)) {
+      const beforeLen = parsed.users.length;
+      parsed.users = parsed.users.filter((u) => u.email?.toLowerCase() !== "aaa@gmail.com");
+      if (parsed.users.length !== beforeLen) dirty = true;
+      const hasMyrlan = parsed.users.some((u) => u.email?.toLowerCase() === "myrlan@mrlan.com");
+      if (!hasMyrlan) {
+        parsed.users.push({
+          id: `usr-${Date.now()}-1`,
+          name: "Administrateur Myrlan",
+          email: "myrlan@mrlan.com",
+          role: "admin",
+          password: hashPassword("123456789"),
+          createdAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+          savedAddresses: []
+        });
+        dirty = true;
+      } else {
+        const u = parsed.users.find((x) => x.email?.toLowerCase() === "myrlan@mrlan.com");
+        if (u && u.role !== "admin") {
+          u.role = "admin";
+          dirty = true;
+        }
+      }
+      const hasOfficial = parsed.users.some((u) => u.email?.toLowerCase() === "official.fr06@gmail.com");
+      if (!hasOfficial) {
+        parsed.users.push({
+          id: `usr-${Date.now()}-2`,
+          name: "Administrateur Officiel",
+          email: "official.fr06@gmail.com",
+          role: "admin",
+          password: hashPassword("123456789"),
+          createdAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+          savedAddresses: []
+        });
+        dirty = true;
+      } else {
+        const u = parsed.users.find((x) => x.email?.toLowerCase() === "official.fr06@gmail.com");
+        if (u && u.role !== "admin") {
+          u.role = "admin";
+          dirty = true;
+        }
+      }
+      for (const u of parsed.users) {
+        if (!u.referralCode) {
+          ensureUserReferralCode(u);
+          dirty = true;
+        }
+      }
+    }
+    if (dirty) {
+      saveDatabase(parsed);
+    } else {
+      cachedDb = parsed;
+      cachedDbMtimeMs = stat.mtimeMs;
+    }
+    return parsed;
+  } catch {
     return {
       products: INITIAL_PRODUCTS,
       orders: INITIAL_ORDERS,
-      users: INITIAL_USERS
+      users: INITIAL_USERS,
+      promoCodes: INITIAL_PROMOS,
+      restockConfig: { ...DEFAULT_RESTOCK_CONFIG },
+      restockNotifications: [],
+      restockEmails: [],
+      maintenanceConfig: { ...DEFAULT_MAINTENANCE_CONFIG },
+      prescriptions: [],
+      contactMessages: [],
+      chatSessions: [],
+      appointments: [],
+      securityLogs: [],
+      securityConfig: {
+        tokenEpoch: 1,
+        maxCodGuestAmount: 250,
+        maxOrderQtyPerItem: 10,
+        maxOrderTotalItems: 30,
+        officialDomain: ""
+      },
+      webmaster: { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] },
+      design: { ...DEFAULT_DESIGN_CONFIG },
+      emailTemplates: DEFAULT_EMAIL_TEMPLATES.map((t) => ({ ...t })),
+      emailLogs: [],
+      resetTokens: [],
+      stockAlerts: [],
+      newsletterSubscribers: [],
+      emailCampaigns: [],
+      reviews: [],
+      referrals: []
     };
   }
 }
 function saveDatabase(db) {
   import_fs.default.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
+  try {
+    cachedDb = db;
+    cachedDbMtimeMs = import_fs.default.statSync(dbFilePath).mtimeMs;
+  } catch {
+    cachedDb = db;
+    cachedDbMtimeMs = -1;
+  }
+}
+var securityRateMap = /* @__PURE__ */ new Map();
+function getClientIp(req) {
+  const fwd = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return fwd || req.ip || req.socket?.remoteAddress || "unknown";
+}
+function recordSecurityEvent(db, entry) {
+  if (!Array.isArray(db.securityLogs)) db.securityLogs = [];
+  db.securityLogs.unshift({
+    id: `sec-${Date.now()}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 19),
+    ...entry
+  });
+  if (db.securityLogs.length > 200) {
+    db.securityLogs = db.securityLogs.slice(0, 200);
+  }
+}
+function checkRateLimit(key, scope, ip, maxAttempts, windowMs, blockMs, incrementNow = true) {
+  const now = Date.now();
+  let rec = securityRateMap.get(key);
+  if (rec && rec.blockedUntil > now) {
+    return { allowed: false, remainingMs: rec.blockedUntil - now, count: rec.count };
+  }
+  if (!rec || rec.resetAt <= now) {
+    rec = { scope, ip, count: 0, resetAt: now + windowMs, blockedUntil: 0 };
+  }
+  if (incrementNow) {
+    rec.count += 1;
+    if (rec.count > maxAttempts) {
+      rec.blockedUntil = now + blockMs;
+      securityRateMap.set(key, rec);
+      return { allowed: false, remainingMs: blockMs, count: rec.count };
+    }
+  }
+  securityRateMap.set(key, rec);
+  return { allowed: true, remainingMs: 0, count: rec.count };
+}
+function recordAuthFailure(key, ip, maxFails = 5, windowMs = 15 * 60 * 1e3, blockMs = 15 * 60 * 1e3) {
+  const now = Date.now();
+  let rec = securityRateMap.get(key);
+  if (!rec || rec.resetAt <= now) {
+    rec = { scope: "auth_login", ip, count: 0, resetAt: now + windowMs, blockedUntil: 0 };
+  }
+  rec.count += 1;
+  if (rec.count >= maxFails) {
+    rec.blockedUntil = now + blockMs;
+  }
+  securityRateMap.set(key, rec);
+  return rec;
+}
+function clearRateKey(key) {
+  securityRateMap.delete(key);
+}
+function isAllowedCorsOrigin(origin, canonicalBaseUrl) {
+  if (!origin) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) || /^https:\/\/[a-z0-9-]+\.[a-z0-9.-]*(run\.app|aistudio\.google\.com|web\.app|firebaseapp\.com)$/i.test(origin)) {
+    return true;
+  }
+  if (canonicalBaseUrl && origin.toLowerCase() === canonicalBaseUrl.toLowerCase()) {
+    return true;
+  }
+  if (process.env.APP_URL && origin.toLowerCase() === process.env.APP_URL.replace(/\/+$/, "").toLowerCase()) {
+    return true;
+  }
+  return false;
+}
+var WEAK_PASSWORDS = ["123456", "123456789", "admin", "password", "azerty", "myrlan"];
+function extractAuth(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  const token = bearerToken || cookies[SESSION_COOKIE_NAME];
+  if (!token) return null;
+  const db = getDatabase();
+  const epoch = Number(db.securityConfig?.tokenEpoch || 1);
+  return verifySessionToken(token, epoch);
+}
+function attachAuth(req, _res, next) {
+  const payload = extractAuth(req);
+  if (payload) req.authUser = payload;
+  next();
+}
+function getSessionCookieOptions(req) {
+  const isHttps = req.secure || req.headers["x-forwarded-proto"] === "https";
+  return {
+    httpOnly: true,
+    sameSite: isHttps ? "none" : "lax",
+    secure: Boolean(isHttps),
+    maxAge: 7 * 24 * 60 * 60 * 1e3
+  };
+}
+function requireAuth(req, res, next) {
+  if (!req.authUser) {
+    return res.status(401).json({ success: false, error: "Authentification requise." });
+  }
+  next();
+}
+function requireAdmin(req, res, next) {
+  if (!req.authUser) {
+    return res.status(401).json({ success: false, error: "Authentification administrateur requise." });
+  }
+  if (req.authUser.role !== "admin") {
+    return res.status(403).json({ success: false, error: "Acc\xE8s r\xE9serv\xE9 aux administrateurs." });
+  }
+  next();
 }
 async function startServer() {
   const app = (0, import_express.default)();
-  app.use(import_express.default.json());
+  app.disable("x-powered-by");
+  app.set("trust proxy", 1);
+  app.use((0, import_compression.default)({ threshold: 1024 }));
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https://www.google-analytics.com https://region1.google-analytics.com; frame-src 'self' blob:; object-src 'self' blob:; frame-ancestors 'self' https://*.google.com https://*.aistudio.google.com https://*.run.app;"
+    );
+    next();
+  });
+  app.use(import_express.default.json({ limit: "2mb" }));
+  app.use(attachAuth);
   const httpServer = (0, import_http.createServer)(app);
   const io2 = new Server(httpServer, {
-    cors: { origin: "*" }
+    cors: {
+      origin: (origin, callback) => {
+        const db = getDatabase();
+        if (isAllowedCorsOrigin(origin, db.webmaster?.canonicalBaseUrl)) {
+          callback(null, true);
+        } else {
+          callback(new Error("Origine non autoris\xE9e"));
+        }
+      },
+      credentials: true
+    },
+    destroyUpgrade: false
   });
-  app.use("/uploads", import_express.default.static(uploadsDir));
+  app.use("/uploads", (req, res, next) => {
+    const requestedFile = import_path.default.basename(req.path || "");
+    if (requestedFile.startsWith("rx-")) {
+      return res.status(403).json({ success: false, error: "Acc\xE8s direct interdit aux ordonnances m\xE9dicales." });
+    }
+    const db = getDatabase();
+    const isPrescriptionAsset = (db.prescriptions || []).some(
+      (rx) => typeof rx.fileUrl === "string" && rx.fileUrl.endsWith(`/${requestedFile}`)
+    );
+    if (isPrescriptionAsset) {
+      return res.status(403).json({ success: false, error: "Acc\xE8s authentifi\xE9 requis pour consulter une ordonnance." });
+    }
+    next();
+  }, import_express.default.static(uploadsDir, { dotfiles: "deny", maxAge: "7d" }));
   const PORT = process.env.PORT || 3e3;
-  const hasAuth = process.env.SMTP_USER && process.env.SMTP_PASS;
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+  const smtpPort = parseInt(process.env.SMTP_PORT || "587", 10);
+  const smtpSecure = process.env.SMTP_SECURE !== void 0 ? process.env.SMTP_SECURE === "true" : smtpPort === 465;
+  const SMTP_FROM_EMAIL = (process.env.SMTP_FROM || process.env.SMTP_USER || "myrlan@myrlan.com").trim();
+  const SMTP_FROM_NAME = (process.env.SMTP_FROM_NAME || "Myrlan Parapharmacie").trim();
+  const smtpFromHeader = `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`;
   const smtpTransporter = hasAuth ? nodemailer_default.createTransport({
     host: process.env.SMTP_HOST || "smtp.ethereal.email",
-    port: parseInt(process.env.SMTP_PORT || "587"),
-    secure: false,
+    port: smtpPort,
+    secure: smtpSecure,
+    connectionTimeout: 1e4,
+    greetingTimeout: 1e4,
+    socketTimeout: 15e3,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
@@ -60804,20 +62639,171 @@ async function startServer() {
   }) : nodemailer_default.createTransport({
     jsonTransport: true
   });
+  if (hasAuth) {
+    console.log(`[SMTP] Configur\xE9 : ${process.env.SMTP_HOST}:${smtpPort} (${smtpSecure ? "SSL/TLS" : "STARTTLS"}) \u2014 exp\xE9diteur : ${SMTP_FROM_EMAIL}`);
+  } else {
+    console.log("[SMTP] Non configur\xE9 (SMTP_USER / SMTP_PASS manquants) \u2014 Mode Aper\xE7u actif");
+  }
+  async function sendTemplatedEmail(db, templateId, to, vars, req, overrideTemplate) {
+    const cleanTo = String(to || "").trim();
+    if (!cleanTo || !cleanTo.includes("@")) return null;
+    const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES;
+    const tpl = overrideTemplate || templates.find((t) => t.id === templateId) || DEFAULT_EMAIL_TEMPLATES.find((t) => t.id === templateId);
+    if (!tpl) return null;
+    const baseUrl = req ? resolveBaseUrl(req, db.webmaster) : process.env.APP_URL || `http://localhost:${PORT}`;
+    const rendered = renderEmailTemplate(tpl, vars, baseUrl);
+    const nowStr = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    if (!tpl.enabled && !overrideTemplate) {
+      const disabledLog = {
+        id: `EML-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+        templateId: tpl.id,
+        templateName: tpl.name,
+        to: cleanTo,
+        subject: rendered.subject,
+        status: "D\xE9sactiv\xE9",
+        sentAt: nowStr
+      };
+      db.emailLogs = [disabledLog, ...Array.isArray(db.emailLogs) ? db.emailLogs : []].slice(0, 80);
+      return { logEntry: disabledLog, rendered };
+    }
+    let dispatchStatus = hasAuth ? "Envoy\xE9 (SMTP)" : "Mode Aper\xE7u";
+    let smtpError = "";
+    try {
+      await smtpTransporter.sendMail({
+        from: smtpFromHeader,
+        to: cleanTo,
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html
+      });
+    } catch (err) {
+      smtpError = String(err?.message || err || "Erreur SMTP inconnue");
+      console.error("[SMTP] Erreur envoi template:", smtpError);
+      dispatchStatus = hasAuth ? "Erreur" : "Mode Aper\xE7u";
+    }
+    const logEntry = {
+      id: `EML-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+      templateId: tpl.id,
+      templateName: tpl.name,
+      to: cleanTo,
+      subject: rendered.subject,
+      status: dispatchStatus,
+      sentAt: nowStr
+    };
+    db.emailLogs = [logEntry, ...Array.isArray(db.emailLogs) ? db.emailLogs : []].slice(0, 80);
+    return { logEntry, rendered, smtpError };
+  }
+  async function notifyBackInStock(db, product, req) {
+    if (!product || Number(product.stock || 0) <= 0 || !Array.isArray(db.stockAlerts)) return 0;
+    const pendingAlerts = db.stockAlerts.filter(
+      (a) => a.productId === product.id && a.status === "En attente"
+    );
+    if (pendingAlerts.length === 0) return 0;
+    const nowStr = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    let sentCount = 0;
+    for (const alert of pendingAlerts) {
+      await sendTemplatedEmail(
+        db,
+        "back_in_stock",
+        alert.email,
+        {
+          productName: String(product.name || ""),
+          productBrand: String(product.brand || ""),
+          productPrice: `${Number(product.price || 0).toFixed(2)} \u20AC`,
+          stockCount: String(product.stock),
+          productPath: `/produit/${encodeURIComponent(String(product.id))}`
+        },
+        req
+      );
+      alert.status = "Notifi\xE9";
+      alert.notifiedAt = nowStr;
+      sentCount += 1;
+    }
+    return sentCount;
+  }
+  function syncCriticalStockNotifications(db, touchedProducts) {
+    const cfg = db.restockConfig || DEFAULT_RESTOCK_CONFIG;
+    const threshold = Math.max(1, Number(cfg.criticalThreshold || 5));
+    if (!Array.isArray(db.restockNotifications)) db.restockNotifications = [];
+    const nowStr = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    const productsToCheck = Array.isArray(touchedProducts) && touchedProducts.length > 0 ? touchedProducts : db.products || [];
+    const newlyTriggered = [];
+    for (const p of productsToCheck) {
+      if (!p || !p.id) continue;
+      const stock = Number(p.stock || 0);
+      const existingIdx = db.restockNotifications.findIndex((n) => n.productId === p.id);
+      if (stock <= threshold) {
+        const severity = stock === 0 ? "out" : "critical";
+        if (existingIdx !== -1) {
+          const prev = db.restockNotifications[existingIdx];
+          const stockDropped = stock < Number(prev.currentStock);
+          db.restockNotifications[existingIdx] = {
+            ...prev,
+            productName: String(p.name || prev.productName),
+            brand: String(p.brand || prev.brand || ""),
+            ean: String(p.ean || prev.ean || ""),
+            currentStock: stock,
+            threshold,
+            severity,
+            acknowledged: stockDropped ? false : prev.acknowledged,
+            triggeredAt: stockDropped ? nowStr : prev.triggeredAt
+          };
+          if (stockDropped) newlyTriggered.push(db.restockNotifications[existingIdx]);
+        } else {
+          const notif = {
+            id: `RST-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+            productId: p.id,
+            productName: String(p.name || ""),
+            brand: String(p.brand || ""),
+            ean: String(p.ean || ""),
+            currentStock: stock,
+            threshold,
+            severity,
+            acknowledged: false,
+            triggeredAt: nowStr
+          };
+          db.restockNotifications.unshift(notif);
+          newlyTriggered.push(notif);
+        }
+      } else if (existingIdx !== -1) {
+        db.restockNotifications.splice(existingIdx, 1);
+      }
+    }
+    db.restockNotifications.sort((a, b) => Number(a.currentStock) - Number(b.currentStock));
+    if (newlyTriggered.length > 0 && cfg.autoNotifyOnOrder !== false) {
+      io2.emit("critical-stock-alert", {
+        threshold,
+        triggered: newlyTriggered,
+        notifications: db.restockNotifications
+      });
+    }
+    io2.emit("restock-notifications-updated", db.restockNotifications);
+    return newlyTriggered;
+  }
   io2.on("connection", (socket) => {
-    console.log(`[WebSocket Server] Client connected in real time: ${socket.id}`);
     socket.on("disconnect", () => {
-      console.log(`[WebSocket Server] Client disconnected: ${socket.id}`);
     });
   });
   app.get("/api/products", (_req, res) => {
     const db = getDatabase();
     res.json(db.products);
   });
-  app.post("/api/products", (req, res) => {
+  app.post("/api/products", requireAdmin, (req, res) => {
+    const { name: name2, brand, category, price, stock, description } = req.body;
+    if (!name2 || !brand || typeof price !== "number" || Number.isNaN(price)) {
+      return res.status(400).json({ success: false, error: "Champs produit invalides." });
+    }
     const db = getDatabase();
     const newProduct = {
       ...req.body,
+      name: String(name2).trim(),
+      brand: String(brand).trim(),
+      category: String(category || "Soin Visage"),
+      price: Math.max(0.1, Number(price)),
+      stock: Math.max(0, Number(stock ?? 0)),
+      description: String(description || ""),
+      ingredients: Array.isArray(req.body.ingredients) ? req.body.ingredients : [],
+      tags: Array.isArray(req.body.tags) ? req.body.tags : [],
       id: `p-${Date.now()}`,
       rating: 5,
       reviewsCount: 1
@@ -60828,62 +62814,429 @@ async function startServer() {
     io2.emit("products-updated", db.products);
     res.json({ success: true, product: newProduct });
   });
-  app.put("/api/products/:id/stock", (req, res) => {
+  app.patch("/api/products/:id", requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    const idx = db.products.findIndex((p) => p.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: "Produit non trouv\xE9." });
+    }
+    const current = db.products[idx];
+    const prevStock = Number(current.stock || 0);
+    const allowedFields = [
+      "name",
+      "brand",
+      "category",
+      "price",
+      "oldPrice",
+      "image",
+      "stock",
+      "description",
+      "ingredients",
+      "usage",
+      "tags",
+      "volume",
+      "ean",
+      "form",
+      "presentation",
+      "contenance"
+    ];
+    const updated = { ...current };
+    for (const key of allowedFields) {
+      if (req.body[key] !== void 0) {
+        updated[key] = req.body[key];
+      }
+    }
+    updated.price = Math.max(0.1, Number(updated.price));
+    updated.stock = Math.max(0, Number(updated.stock));
+    if (updated.oldPrice !== void 0 && updated.oldPrice !== null && updated.oldPrice !== "") {
+      updated.oldPrice = Number(updated.oldPrice);
+    } else {
+      delete updated.oldPrice;
+    }
+    db.products[idx] = updated;
+    let notifiedCount = 0;
+    if (prevStock <= 0 && updated.stock > 0) {
+      notifiedCount = await notifyBackInStock(db, updated, req);
+    }
+    syncCriticalStockNotifications(db, [updated]);
+    saveDatabase(db);
+    io2.emit("products-updated", db.products);
+    res.json({ success: true, product: updated, notifiedCount });
+  });
+  app.delete("/api/products/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    const exists = db.products.some((p) => p.id === id);
+    if (!exists) {
+      return res.status(404).json({ success: false, error: "Produit non trouv\xE9." });
+    }
+    db.products = db.products.filter((p) => p.id !== id);
+    db.restockNotifications = (db.restockNotifications || []).filter((n) => n.productId !== id);
+    saveDatabase(db);
+    io2.emit("products-updated", db.products);
+    io2.emit("restock-notifications-updated", db.restockNotifications);
+    res.json({ success: true });
+  });
+  app.put("/api/products/:id/stock", requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { stock } = req.body;
     const db = getDatabase();
     const p = db.products.find((item) => item.id === id);
     if (p) {
-      p.stock = Math.max(0, stock);
+      const prevStock = Number(p.stock || 0);
+      p.stock = Math.max(0, Number(stock) || 0);
+      let notifiedCount = 0;
+      if (prevStock <= 0 && p.stock > 0) {
+        notifiedCount = await notifyBackInStock(db, p, req);
+      }
+      syncCriticalStockNotifications(db, [p]);
       saveDatabase(db);
       io2.emit("stock-updated", { productId: id, stock: p.stock });
       io2.emit("products-updated", db.products);
-      res.json({ success: true, product: p });
+      res.json({ success: true, product: p, notifiedCount });
     } else {
       res.status(404).json({ success: false, error: "Produit non trouv\xE9" });
     }
   });
-  app.post("/api/upload", upload.single("image"), (req, res) => {
-    try {
+  app.post("/api/upload", requireAdmin, (req, res) => {
+    uploadImage.single("image")(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ success: false, error: err.message || "Erreur t\xE9l\xE9versement." });
+      }
       if (!req.file) {
         return res.status(400).json({ success: false, error: "Aucun fichier image fourni." });
       }
+      const resolved = import_path.default.resolve(req.file.path);
+      if (!resolved.startsWith(uploadsDir + import_path.default.sep)) {
+        return res.status(400).json({ success: false, error: "Chemin de fichier invalide." });
+      }
       const fileUrl = `/uploads/${req.file.filename}`;
-      console.log(`[Server Storage] Image uploaded and stored on server disk: ${fileUrl}`);
       res.json({ success: true, url: fileUrl });
-    } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+    });
+  });
+  app.get("/api/promos", (_req, res) => {
+    const db = getDatabase();
+    res.json(db.promoCodes);
+  });
+  app.post("/api/promos/validate", (req, res) => {
+    const { code, subtotal = 0 } = req.body;
+    const normalized2 = String(code || "").trim().toUpperCase();
+    if (!normalized2) {
+      return res.status(400).json({ success: false, error: "Veuillez saisir un code promo." });
     }
-  });
-  app.get("/api/orders", (_req, res) => {
     const db = getDatabase();
-    res.json(db.orders);
-  });
-  app.post("/api/orders", (req, res) => {
-    const db = getDatabase();
-    const newOrder = req.body;
-    db.orders.unshift(newOrder);
-    if (newOrder.items) {
-      newOrder.items.forEach((cartItem) => {
-        const prod = db.products.find((p) => p.id === cartItem.product.id);
-        if (prod) {
-          prod.stock = Math.max(0, prod.stock - cartItem.quantity);
+    const promo = db.promoCodes.find((p) => p.code.toUpperCase() === normalized2 && p.active);
+    if (promo) {
+      if (Number(subtotal) < (promo.minOrder || 0)) {
+        return res.status(400).json({
+          success: false,
+          error: `Ce code n\xE9cessite un minimum d'achat de ${promo.minOrder} \u20AC.`
+        });
+      }
+      return res.json({ success: true, promo });
+    }
+    if (normalized2.startsWith("MYR-")) {
+      const referrer = db.users.find((u) => ensureUserReferralCode(u) === normalized2);
+      if (referrer) {
+        if (req.authUser && (req.authUser.id === referrer.id || req.authUser.email.toLowerCase() === referrer.email.toLowerCase())) {
+          return res.status(400).json({
+            success: false,
+            error: "Vous ne pouvez pas utiliser votre propre code de parrainage."
+          });
         }
+        const firstName = String(referrer.name || "Client").split(" ")[0];
+        return res.json({
+          success: true,
+          promo: {
+            id: `ref-${referrer.id}`,
+            code: normalized2,
+            discountPercent: 10,
+            minOrder: 0,
+            description: `Code parrainage de ${firstName} (-10%)`,
+            active: true,
+            isReferral: true
+          }
+        });
+      }
+    }
+    return res.status(404).json({ success: false, error: "Code promo ou parrainage invalide." });
+  });
+  app.post("/api/promos", requireAdmin, (req, res) => {
+    const { code, discountPercent, minOrder = 0, description = "" } = req.body;
+    const cleanCode = String(code || "").trim().toUpperCase();
+    if (!cleanCode || !discountPercent || Number(discountPercent) <= 0 || Number(discountPercent) > 90) {
+      return res.status(400).json({ success: false, error: "Code ou pourcentage de remise invalide (1\u201390%)." });
+    }
+    const db = getDatabase();
+    if (db.promoCodes.some((p) => p.code.toUpperCase() === cleanCode)) {
+      return res.status(400).json({ success: false, error: "Ce code promo existe d\xE9j\xE0." });
+    }
+    const newPromo = {
+      id: `promo-${Date.now()}`,
+      code: cleanCode,
+      discountPercent: Number(discountPercent),
+      minOrder: Math.max(0, Number(minOrder) || 0),
+      description: String(description).trim() || `-${discountPercent}% sur votre commande`,
+      active: true
+    };
+    db.promoCodes.unshift(newPromo);
+    saveDatabase(db);
+    io2.emit("promos-updated", db.promoCodes);
+    res.json({ success: true, promo: newPromo });
+  });
+  app.patch("/api/promos/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    const promo = db.promoCodes.find((p) => p.id === id);
+    if (!promo) {
+      return res.status(404).json({ success: false, error: "Code promo non trouv\xE9." });
+    }
+    if (req.body.active !== void 0) promo.active = Boolean(req.body.active);
+    if (req.body.discountPercent !== void 0) promo.discountPercent = Number(req.body.discountPercent);
+    if (req.body.minOrder !== void 0) promo.minOrder = Number(req.body.minOrder);
+    if (req.body.description !== void 0) promo.description = String(req.body.description);
+    saveDatabase(db);
+    io2.emit("promos-updated", db.promoCodes);
+    res.json({ success: true, promo });
+  });
+  app.delete("/api/promos/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    db.promoCodes = db.promoCodes.filter((p) => p.id !== id);
+    saveDatabase(db);
+    io2.emit("promos-updated", db.promoCodes);
+    res.json({ success: true });
+  });
+  app.get("/api/orders", (req, res) => {
+    const db = getDatabase();
+    if (!req.authUser) {
+      return res.json([]);
+    }
+    if (req.authUser.role === "admin") {
+      return res.json(db.orders);
+    }
+    const emailLower = req.authUser.email.toLowerCase();
+    const filtered = db.orders.filter(
+      (o) => o.userId === req.authUser.id || o.shippingAddress?.email?.toLowerCase() === emailLower
+    );
+    return res.json(filtered);
+  });
+  app.post("/api/orders", async (req, res) => {
+    const ip = getClientIp(req);
+    const incoming = req.body || {};
+    const db = getDatabase();
+    if (incoming.website && String(incoming.website).trim() !== "") {
+      recordSecurityEvent(db, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "BOT_HONEYPOT",
+        detail: "Soumission automatis\xE9e d\xE9tect\xE9e et bloqu\xE9e sur le tunnel de commande.",
+        actor: req.authUser?.email || "Visiteur",
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({ success: false, error: "Validation de s\xE9curit\xE9 \xE9chou\xE9e." });
+    }
+    if (req.authUser?.role !== "admin") {
+      const rl = checkRateLimit(`orders:${ip}`, "orders", ip, 6, 15 * 60 * 1e3, 15 * 60 * 1e3);
+      if (!rl.allowed) {
+        recordSecurityEvent(db, {
+          category: "anti_sabotage",
+          severity: "critical",
+          event: "ORDER_FLOOD_BLOCKED",
+          detail: "Trop de tentatives de commande rapproch\xE9es depuis la m\xEAme adresse.",
+          actor: req.authUser?.email || "Visiteur",
+          ip
+        });
+        saveDatabase(db);
+        return res.status(429).json({
+          success: false,
+          error: "Trop de commandes envoy\xE9es en peu de temps. R\xE9essayez dans quelques minutes."
+        });
+      }
+    }
+    if (!incoming || !Array.isArray(incoming.items) || incoming.items.length === 0) {
+      return res.status(400).json({ success: false, error: "Le panier est vide." });
+    }
+    const secCfg = db.securityConfig || { maxCodGuestAmount: 250, maxOrderQtyPerItem: 10, maxOrderTotalItems: 30 };
+    const maxPerItem = Number(secCfg.maxOrderQtyPerItem) || 10;
+    const maxTotalUnits = Number(secCfg.maxOrderTotalItems) || 30;
+    const requestedUnits = incoming.items.reduce((s, it) => s + Math.max(1, Number(it?.quantity) || 1), 0);
+    if (requestedUnits > maxTotalUnits) {
+      recordSecurityEvent(db, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "ORDER_QTY_GUARD",
+        detail: `Tentative de commande excessive (${requestedUnits} unit\xE9s > plafond ${maxTotalUnits}).`,
+        actor: req.authUser?.email || String(incoming.shippingAddress?.email || "Visiteur"),
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({
+        success: false,
+        error: `Par s\xE9curit\xE9 contre les achats abusifs, le total est limit\xE9 \xE0 ${maxTotalUnits} unit\xE9s par commande.`
       });
     }
+    let serverSubtotal = 0;
+    const normalizedItems = [];
+    for (const cartItem of incoming.items) {
+      const prod = db.products.find((p) => p.id === cartItem.product?.id);
+      if (!prod || prod.stock <= 0) continue;
+      const requestedQty = Math.max(1, Number(cartItem.quantity) || 1);
+      if (requestedQty > maxPerItem) {
+        recordSecurityEvent(db, {
+          category: "anti_sabotage",
+          severity: "warning",
+          event: "ORDER_ITEM_CAP",
+          detail: `Quantit\xE9 abusive (${requestedQty}) demand\xE9e pour ${prod.name}.`,
+          actor: req.authUser?.email || "Visiteur",
+          ip
+        });
+        saveDatabase(db);
+        return res.status(400).json({
+          success: false,
+          error: `Maximum ${maxPerItem} unit\xE9(s) autoris\xE9es par produit (${prod.name}).`
+        });
+      }
+      const qty = Math.min(prod.stock, requestedQty);
+      serverSubtotal += prod.price * qty;
+      normalizedItems.push({ product: prod, quantity: qty });
+    }
+    if (normalizedItems.length === 0) {
+      return res.status(400).json({ success: false, error: "Aucun produit valide ou en stock dans la commande." });
+    }
+    const maxCodGuest = Number(secCfg.maxCodGuestAmount) || 250;
+    if ((incoming.paymentMethod || "card") === "cod" && !req.authUser && serverSubtotal > maxCodGuest) {
+      recordSecurityEvent(db, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "COD_GUEST_LIMIT",
+        detail: `Commande COD invit\xE9 bloqu\xE9e (${serverSubtotal.toFixed(2)} \u20AC > ${maxCodGuest} \u20AC).`,
+        actor: String(incoming.shippingAddress?.email || "Visiteur"),
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({
+        success: false,
+        error: `Pour pr\xE9venir les fausses commandes, le paiement \xE0 la livraison invit\xE9 est plafonn\xE9 \xE0 ${maxCodGuest} \u20AC. Connectez-vous ou choisissez le paiement par carte.`
+      });
+    }
+    for (const item of normalizedItems) {
+      item.product.stock = Math.max(0, item.product.stock - item.quantity);
+    }
+    syncCriticalStockNotifications(db, normalizedItems.map((it) => it.product));
+    let discountAmount = 0;
+    let appliedPromoCode;
+    let appliedReferrer = null;
+    if (incoming.promoCode) {
+      const normalizedCode = String(incoming.promoCode).trim().toUpperCase();
+      const promo = db.promoCodes.find(
+        (p) => p.code.toUpperCase() === normalizedCode && p.active
+      );
+      if (promo && serverSubtotal >= (promo.minOrder || 0)) {
+        discountAmount = Number((serverSubtotal * promo.discountPercent / 100).toFixed(2));
+        appliedPromoCode = promo.code;
+      } else if (normalizedCode.startsWith("MYR-")) {
+        const referrer = db.users.find((u) => ensureUserReferralCode(u) === normalizedCode);
+        const buyerEmailLower = String(incoming.shippingAddress?.email || req.authUser?.email || "").trim().toLowerCase();
+        if (referrer && referrer.id !== req.authUser?.id && referrer.email.toLowerCase() !== buyerEmailLower) {
+          discountAmount = Number((serverSubtotal * 10 / 100).toFixed(2));
+          appliedPromoCode = normalizedCode;
+          appliedReferrer = referrer;
+        }
+      }
+    }
+    const carrier = incoming.carrier || "colissimo";
+    const shippingFee = carrier === "click_and_collect" || serverSubtotal >= 49 ? 0 : carrier === "chronopost" ? 9.9 : carrier === "mondial_relay" ? 3.9 : 4.9;
+    const totalAmount = Number(Math.max(0, serverSubtotal - discountAmount + shippingFee).toFixed(2));
+    const loyaltyPointsEarned = Math.floor(totalAmount);
+    const newOrder = {
+      id: incoming.id || `ORD-${Math.floor(1e3 + Math.random() * 9e3)}`,
+      date: incoming.date || (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16),
+      items: normalizedItems,
+      subtotal: Number(serverSubtotal.toFixed(2)),
+      discountAmount,
+      shippingFee,
+      promoCode: appliedPromoCode,
+      totalAmount,
+      shippingAddress: incoming.shippingAddress,
+      paymentMethod: incoming.paymentMethod || "card",
+      carrier,
+      status: "En pr\xE9paration",
+      trackingNumber: incoming.trackingNumber || `FR${Math.floor(1e8 + Math.random() * 9e8)}`,
+      loyaltyPointsEarned,
+      userId: req.authUser?.id
+    };
+    db.orders.unshift(newOrder);
+    if (req.authUser) {
+      const buyer = db.users.find((u) => u.id === req.authUser.id);
+      if (buyer) {
+        buyer.loyaltyPoints = Number(buyer.loyaltyPoints || 0) + loyaltyPointsEarned;
+      }
+    }
+    if (appliedReferrer) {
+      appliedReferrer.loyaltyPoints = Number(appliedReferrer.loyaltyPoints || 0) + 150;
+      appliedReferrer.referralsCount = Number(appliedReferrer.referralsCount || 0) + 1;
+      if (!Array.isArray(db.referrals)) db.referrals = [];
+      db.referrals.unshift({
+        id: `REF-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+        referrerUserId: appliedReferrer.id,
+        referrerCode: ensureUserReferralCode(appliedReferrer),
+        referredEmail: String(incoming.shippingAddress?.email || req.authUser?.email || "client"),
+        orderId: newOrder.id,
+        rewardPoints: 150,
+        discountGranted: discountAmount,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16)
+      });
+    }
+    await sendTemplatedEmail(
+      db,
+      "order_confirmed",
+      String(incoming.shippingAddress?.email || ""),
+      {
+        patientName: String(incoming.shippingAddress?.fullName || "Client"),
+        orderId: newOrder.id,
+        totalAmount: `${newOrder.totalAmount.toFixed(2)} \u20AC`,
+        carrier: newOrder.carrier,
+        trackingNumber: newOrder.trackingNumber,
+        orderDate: newOrder.date
+      },
+      req
+    );
     saveDatabase(db);
     io2.emit("order-created", newOrder);
     io2.emit("orders-updated", db.orders);
     io2.emit("products-updated", db.products);
     res.json({ success: true, order: newOrder });
   });
-  app.patch("/api/orders/:id/status", (req, res) => {
+  app.patch("/api/orders/:id/status", requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
+    const allowedStatuses = ["En pr\xE9paration", "Exp\xE9di\xE9", "En cours de livraison", "Livr\xE9"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: "Statut invalide." });
+    }
     const db = getDatabase();
     const order = db.orders.find((o) => o.id === id);
     if (order) {
+      const prevStatus = order.status;
       order.status = status;
+      if (prevStatus !== status) {
+        const orderVars = {
+          patientName: String(order.shippingAddress?.fullName || "Client"),
+          orderId: order.id,
+          totalAmount: `${Number(order.totalAmount || 0).toFixed(2)} \u20AC`,
+          carrier: String(order.carrier || "colissimo"),
+          trackingNumber: String(order.trackingNumber || ""),
+          loyaltyPoints: String(order.loyaltyPointsEarned || 0)
+        };
+        if (status === "Exp\xE9di\xE9") {
+          await sendTemplatedEmail(db, "order_shipped", String(order.shippingAddress?.email || ""), orderVars, req);
+        } else if (status === "Livr\xE9") {
+          await sendTemplatedEmail(db, "order_delivered", String(order.shippingAddress?.email || ""), orderVars, req);
+        }
+      }
       saveDatabase(db);
       io2.emit("order-status-updated", { orderId: id, status });
       io2.emit("orders-updated", db.orders);
@@ -60892,47 +63245,699 @@ async function startServer() {
       res.status(404).json({ success: false, error: "Commande non trouv\xE9e" });
     }
   });
-  app.post("/api/auth/login", (req, res) => {
-    const { email, password } = req.body;
-    const db = getDatabase();
-    const user = db.users.find((u) => u.email === email && u.password === password);
-    if (user) {
-      res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
-    } else {
-      res.status(401).json({ success: false, error: "Email ou mot de passe incorrect sur le serveur." });
+  app.post("/api/orders/:id/return", requireAuth, (req, res) => {
+    const { id } = req.params;
+    const { reason, details } = req.body;
+    if (!reason) {
+      return res.status(400).json({ success: false, error: "Veuillez pr\xE9ciser le motif du retour." });
     }
+    const db = getDatabase();
+    const order = db.orders.find((o) => o.id === id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: "Commande non trouv\xE9e." });
+    }
+    const isOwner = req.authUser.role === "admin" || order.userId === req.authUser.id || order.shippingAddress?.email?.toLowerCase() === req.authUser.email.toLowerCase();
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: "Acc\xE8s non autoris\xE9 \xE0 cette commande." });
+    }
+    order.returnRequest = {
+      id: `RET-${Date.now()}`,
+      orderId: id,
+      reason: String(reason).trim(),
+      details: String(details || "").trim(),
+      status: "En cours d'examen",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+    };
+    saveDatabase(db);
+    io2.emit("orders-updated", db.orders);
+    res.json({ success: true, order });
   });
-  app.post("/api/auth/register", (req, res) => {
-    const { name: name2, email, password } = req.body;
-    const db = getDatabase();
-    const existing = db.users.find((u) => u.email === email);
-    if (existing) {
-      return res.status(400).json({ success: false, error: "Cet email est d\xE9j\xE0 enregistr\xE9 sur le serveur." });
+  app.post("/api/prescriptions", (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`rx:${ip}`, "prescriptions", ip, 6, 30 * 60 * 1e3, 30 * 60 * 1e3);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: "Trop d\u2019envois d\u2019ordonnances sur une courte p\xE9riode. R\xE9essayez plus tard."
+      });
     }
-    const newUser = { id: `usr-${Date.now()}`, name: name2, email, password, role: "customer" };
+    uploadPrescription.single("file")(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ success: false, error: err.message || "Erreur lors de l\u2019envoi du fichier." });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "Veuillez joindre votre ordonnance (image ou PDF)." });
+      }
+      const resolved = import_path.default.resolve(req.file.path);
+      if (!resolved.startsWith(prescriptionsDir + import_path.default.sep)) {
+        return res.status(400).json({ success: false, error: "Chemin de fichier invalide." });
+      }
+      const { patientName, email, phone, deliveryMode = "click_and_collect", notes = "" } = req.body;
+      if (!patientName || !email || !phone) {
+        return res.status(400).json({ success: false, error: "Veuillez renseigner votre nom, email et t\xE9l\xE9phone." });
+      }
+      const db = getDatabase();
+      const rxId = `ORD-RX-${Math.floor(1e3 + Math.random() * 9e3)}`;
+      const newPrescription = {
+        id: rxId,
+        patientName: String(patientName).trim().slice(0, 100),
+        email: String(email).trim().slice(0, 120),
+        phone: String(phone).trim().slice(0, 30),
+        deliveryMode: deliveryMode === "delivery" ? "delivery" : "click_and_collect",
+        notes: String(notes).trim().slice(0, 800),
+        storedFileName: req.file.filename,
+        fileUrl: `/api/prescriptions/${rxId}/file`,
+        fileName: req.file.originalname,
+        status: "En attente",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16),
+        userId: req.authUser?.id
+      };
+      db.prescriptions.unshift(newPrescription);
+      recordSecurityEvent(db, {
+        category: "medical_privacy",
+        severity: "info",
+        event: "PRESCRIPTION_STORED_VAULT",
+        detail: `Ordonnance ${rxId} chiffr\xE9e/isol\xE9e dans le coffre priv\xE9 officinal.`,
+        actor: newPrescription.email,
+        ip
+      });
+      saveDatabase(db);
+      io2.emit("prescriptions-updated", db.prescriptions);
+      res.json({ success: true, prescription: newPrescription });
+    });
+  });
+  app.get("/api/prescriptions", requireAuth, (req, res) => {
+    const db = getDatabase();
+    if (req.authUser.role === "admin") {
+      return res.json(db.prescriptions);
+    }
+    const emailLower = req.authUser.email.toLowerCase();
+    const mine = db.prescriptions.filter(
+      (p) => p.userId === req.authUser.id || p.email?.toLowerCase() === emailLower
+    );
+    res.json(mine);
+  });
+  app.get("/api/prescriptions/:id/file", requireAuth, (req, res) => {
+    const { id } = req.params;
+    const ip = getClientIp(req);
+    const db = getDatabase();
+    const rx = (db.prescriptions || []).find((p) => p.id === id);
+    if (!rx) {
+      return res.status(404).json({ success: false, error: "Ordonnance introuvable." });
+    }
+    const isOwnerOrAdmin = req.authUser.role === "admin" || rx.userId === req.authUser.id || String(rx.email || "").toLowerCase() === req.authUser.email.toLowerCase();
+    if (!isOwnerOrAdmin) {
+      recordSecurityEvent(db, {
+        category: "medical_privacy",
+        severity: "critical",
+        event: "PRESCRIPTION_UNAUTHORIZED_ACCESS",
+        detail: `Tentative d\u2019acc\xE8s non autoris\xE9e \xE0 l\u2019ordonnance ${id}.`,
+        actor: req.authUser.email,
+        ip
+      });
+      saveDatabase(db);
+      return res.status(403).json({ success: false, error: "Acc\xE8s strictement interdit \xE0 cette ordonnance." });
+    }
+    const rawStored = rx.storedFileName || import_path.default.basename(String(rx.fileUrl || ""));
+    const safeName = import_path.default.basename(rawStored);
+    if (!safeName) {
+      return res.status(404).json({ success: false, error: "Fichier introuvable." });
+    }
+    let resolvedPath = import_path.default.resolve(prescriptionsDir, safeName);
+    if (!resolvedPath.startsWith(prescriptionsDir + import_path.default.sep) || !import_fs.default.existsSync(resolvedPath)) {
+      const legacyPath = import_path.default.resolve(uploadsDir, safeName);
+      if (legacyPath.startsWith(uploadsDir + import_path.default.sep) && import_fs.default.existsSync(legacyPath)) {
+        resolvedPath = legacyPath;
+      } else {
+        return res.status(404).json({ success: false, error: "Fichier d\u2019ordonnance introuvable." });
+      }
+    }
+    recordSecurityEvent(db, {
+      category: "medical_privacy",
+      severity: "info",
+      event: "PRESCRIPTION_ACCESSED",
+      detail: `Consultation s\xE9curis\xE9e du document m\xE9dical ${id}.`,
+      actor: req.authUser.email,
+      ip
+    });
+    saveDatabase(db);
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(resolvedPath);
+  });
+  app.patch("/api/prescriptions/:id", requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { status, pharmacistNote } = req.body;
+    const allowed = ["En attente", "Valid\xE9e par le pharmacien", "Pr\xEAte en officine", "Refus\xE9e"];
+    if (status && !allowed.includes(status)) {
+      return res.status(400).json({ success: false, error: "Statut d\u2019ordonnance invalide." });
+    }
+    const db = getDatabase();
+    const rx = db.prescriptions.find((p) => p.id === id);
+    if (!rx) {
+      return res.status(404).json({ success: false, error: "Ordonnance non trouv\xE9e." });
+    }
+    const prevStatus = rx.status;
+    if (status) rx.status = status;
+    if (pharmacistNote !== void 0) rx.pharmacistNote = String(pharmacistNote);
+    if (status && status !== prevStatus) {
+      const rxVars = {
+        patientName: String(rx.patientName || "Patient"),
+        prescriptionId: rx.id,
+        prescriptionStatus: rx.status,
+        deliveryMode: rx.deliveryMode === "click_and_collect" ? "Retrait Click & Collect" : "Livraison s\xE9curis\xE9e",
+        pharmacistNote: String(rx.pharmacistNote || "Aucune remarque particuli\xE8re.")
+      };
+      if (status === "Valid\xE9e par le pharmacien" || status === "Pr\xEAte en officine") {
+        await sendTemplatedEmail(db, "prescription_ready", String(rx.email || ""), rxVars, req);
+      } else if (status === "Refus\xE9e") {
+        await sendTemplatedEmail(db, "prescription_refused", String(rx.email || ""), rxVars, req);
+      }
+    }
+    recordSecurityEvent(db, {
+      category: "admin",
+      severity: "info",
+      event: "PRESCRIPTION_STATUS_UPDATED",
+      detail: `Ordonnance ${id} pass\xE9e au statut "${rx.status}".`,
+      actor: req.authUser?.email || "Admin",
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    io2.emit("prescriptions-updated", db.prescriptions);
+    res.json({ success: true, prescription: rx });
+  });
+  app.post("/api/contact", async (req, res) => {
+    const ip = getClientIp(req);
+    const { name: name2, email, phone = "", subject, message, website } = req.body || {};
+    const db = getDatabase();
+    if (website && String(website).trim() !== "") {
+      recordSecurityEvent(db, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "BOT_HONEYPOT",
+        detail: "Bot bloqu\xE9 sur le formulaire de contact.",
+        actor: String(email || "Bot"),
+        ip
+      });
+      saveDatabase(db);
+      return res.status(400).json({ success: false, error: "Envoi refus\xE9." });
+    }
+    const rl = checkRateLimit(`contact:${ip}`, "contact", ip, 5, 15 * 60 * 1e3, 15 * 60 * 1e3);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: "Trop de messages envoy\xE9s. Veuillez patienter avant de renvoyer une demande."
+      });
+    }
+    if (!name2 || !email || !subject || !message) {
+      return res.status(400).json({ success: false, error: "Veuillez remplir tous les champs obligatoires." });
+    }
+    const entry = {
+      id: `MSG-${Date.now()}`,
+      name: String(name2).trim().slice(0, 100),
+      email: String(email).trim().slice(0, 120),
+      phone: String(phone).trim().slice(0, 30),
+      subject: String(subject).trim().slice(0, 160),
+      message: String(message).trim().slice(0, 2e3),
+      status: "Nouveau",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16)
+    };
+    db.contactMessages.unshift(entry);
+    saveDatabase(db);
+    io2.emit("contacts-updated", db.contactMessages);
+    try {
+      await smtpTransporter.sendMail({
+        from: smtpFromHeader,
+        to: process.env.SMTP_CONTACT_TO || SMTP_FROM_EMAIL,
+        replyTo: entry.email,
+        subject: `[Contact Site] ${entry.subject}`,
+        text: `De : ${entry.name} (${entry.email} / ${entry.phone})
+
+${entry.message}`
+      });
+    } catch (err) {
+      console.error("[SMTP] Erreur envoi contact:", err?.message || err);
+    }
+    res.json({ success: true, contactMessage: entry });
+  });
+  app.get("/api/contact", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json(db.contactMessages);
+  });
+  app.patch("/api/contact/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    const db = getDatabase();
+    const msg = db.contactMessages.find((m) => m.id === id);
+    if (!msg) return res.status(404).json({ success: false, error: "Message non trouv\xE9." });
+    msg.status = status === "Trait\xE9" ? "Trait\xE9" : "Nouveau";
+    saveDatabase(db);
+    io2.emit("contacts-updated", db.contactMessages);
+    res.json({ success: true, contactMessage: msg });
+  });
+  app.get("/api/chat/session/:sessionId", (req, res) => {
+    const sessionId = String(req.params.sessionId || "").trim();
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: "Session de chat invalide." });
+    }
+    const db = getDatabase();
+    const session = db.chatSessions.find((s) => s.id === sessionId) || null;
+    res.json({ success: true, session });
+  });
+  app.post("/api/chat/session/:sessionId/messages", (req, res) => {
+    const ip = getClientIp(req);
+    const { text, visitorName, visitorEmail, timestamp, website } = req.body || {};
+    if (website && String(website).trim().length > 0) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "CHAT_HONEYPOT_TRIGGERED",
+        detail: "Message automatis\xE9 rejet\xE9 via champ pi\xE8ge sur le tchat en direct.",
+        actor: String(visitorEmail || "bot"),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(400).json({ success: false, error: "Requ\xEAte rejet\xE9e par le filtre anti-spam." });
+    }
+    const rate = checkRateLimit(`chat:${ip}`, "chat_messages", ip, 25, 10 * 60 * 1e3, 10 * 60 * 1e3, true);
+    if (!rate.allowed) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "CHAT_RATE_LIMIT_BLOCKED",
+        detail: "Rafale excessive de messages sur le tchat patient.",
+        actor: String(visitorEmail || "anonyme"),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(429).json({
+        success: false,
+        error: "Vous envoyez des messages trop rapidement. Merci de patienter quelques minutes."
+      });
+    }
+    const sessionId = String(req.params.sessionId || "").trim();
+    const cleanText = String(text || "").trim().slice(0, 2e3);
+    if (!sessionId || !cleanText) {
+      return res.status(400).json({ success: false, error: "Le message ne peut pas \xEAtre vide." });
+    }
+    const db = getDatabase();
+    const authUserObj = req.authUser ? db.users.find((u) => u.id === req.authUser.id) : null;
+    const nowDisplay = (/* @__PURE__ */ new Date()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    let session = db.chatSessions.find((s) => s.id === sessionId);
+    const resolvedName = authUserObj?.name || (visitorName ? String(visitorName).trim() : "") || session?.visitorName || `Visiteur #${sessionId.slice(-4).toUpperCase()}`;
+    const resolvedEmail = authUserObj?.email || (visitorEmail ? String(visitorEmail).trim() : "") || session?.visitorEmail || "";
+    if (!session) {
+      session = {
+        id: sessionId,
+        visitorName: resolvedName,
+        visitorEmail: resolvedEmail,
+        userId: authUserObj?.id,
+        status: "Ouvert",
+        unreadByAdmin: 0,
+        updatedAt: nowIso,
+        messages: []
+      };
+      db.chatSessions.unshift(session);
+    } else {
+      session.visitorName = resolvedName;
+      if (resolvedEmail) session.visitorEmail = resolvedEmail;
+      if (authUserObj?.id) session.userId = authUserObj.id;
+      session.status = "Ouvert";
+    }
+    const userMsg = {
+      id: `chat-${Date.now()}-${import_crypto.default.randomBytes(3).toString("hex")}`,
+      sender: "user",
+      senderName: resolvedName,
+      text: cleanText,
+      timestamp: timestamp ? String(timestamp) : nowDisplay,
+      createdAt: nowIso
+    };
+    session.messages.push(userMsg);
+    session.unreadByAdmin = (Number(session.unreadByAdmin) || 0) + 1;
+    session.updatedAt = nowIso;
+    const hasPharmacistOrBotAck = session.messages.some((m) => m.sender === "bot" || m.sender === "pharmacist");
+    if (!hasPharmacistOrBotAck) {
+      session.messages.push({
+        id: `chat-ack-${Date.now()}`,
+        sender: "bot",
+        senderName: "Assistant Myrlan",
+        text: "Merci pour votre message. Il vient d'\xEAtre transmis \xE0 notre \xE9quipe officinale ; un pharmacien vous r\xE9pondra ici m\xEAme dans les plus brefs d\xE9lais.",
+        timestamp: nowDisplay,
+        createdAt: nowIso
+      });
+    }
+    db.chatSessions = [session, ...db.chatSessions.filter((s) => s.id !== sessionId)];
+    saveDatabase(db);
+    io2.emit("chat-session-updated", session);
+    io2.emit("chat-sessions-updated", db.chatSessions);
+    res.json({ success: true, session, message: userMsg });
+  });
+  app.get("/api/admin/chat", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json(db.chatSessions);
+  });
+  app.post("/api/admin/chat/:sessionId/reply", requireAdmin, (req, res) => {
+    const sessionId = String(req.params.sessionId || "").trim();
+    const { text } = req.body;
+    const cleanText = String(text || "").trim();
+    if (!cleanText) {
+      return res.status(400).json({ success: false, error: "Veuillez saisir une r\xE9ponse." });
+    }
+    const db = getDatabase();
+    const session = db.chatSessions.find((s) => s.id === sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: "Conversation introuvable." });
+    }
+    const adminUser = db.users.find((u) => u.id === req.authUser.id);
+    const nowDisplay = (/* @__PURE__ */ new Date()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    const replyMsg = {
+      id: `chat-rx-${Date.now()}-${import_crypto.default.randomBytes(3).toString("hex")}`,
+      sender: "pharmacist",
+      senderName: adminUser?.name ? `${adminUser.name} (Pharmacien)` : "Claire (Pharmacienne)",
+      text: cleanText,
+      timestamp: nowDisplay,
+      createdAt: nowIso
+    };
+    session.messages.push(replyMsg);
+    session.unreadByAdmin = 0;
+    session.updatedAt = nowIso;
+    db.chatSessions = [session, ...db.chatSessions.filter((s) => s.id !== sessionId)];
+    saveDatabase(db);
+    io2.emit("chat-session-updated", session);
+    io2.emit("chat-sessions-updated", db.chatSessions);
+    res.json({ success: true, session, message: replyMsg });
+  });
+  app.patch("/api/admin/chat/:sessionId", requireAdmin, (req, res) => {
+    const sessionId = String(req.params.sessionId || "").trim();
+    const { status, markRead } = req.body;
+    const db = getDatabase();
+    const session = db.chatSessions.find((s) => s.id === sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: "Conversation introuvable." });
+    }
+    if (status === "Ouvert" || status === "R\xE9solu") {
+      session.status = status;
+    }
+    if (markRead) {
+      session.unreadByAdmin = 0;
+    }
+    saveDatabase(db);
+    io2.emit("chat-session-updated", session);
+    io2.emit("chat-sessions-updated", db.chatSessions);
+    res.json({ success: true, session });
+  });
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.authUser) {
+      return res.json({ authenticated: false, user: null });
+    }
+    const db = getDatabase();
+    const user = db.users.find((u) => u.id === req.authUser.id);
+    if (!user) {
+      return res.json({ authenticated: false, user: null });
+    }
+    res.json({ authenticated: true, user: sanitizeUser(user) });
+  });
+  app.post("/api/auth/login", (req, res) => {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: "Email et mot de passe requis." });
+    }
+    const ip = getClientIp(req);
+    const cleanEmail = String(email).trim().toLowerCase();
+    const loginKey = `login:${ip}:${cleanEmail}`;
+    const preCheck = checkRateLimit(loginKey, "auth_login", ip, 5, 15 * 60 * 1e3, 15 * 60 * 1e3, false);
+    if (!preCheck.allowed) {
+      const waitMin = Math.max(1, Math.ceil(preCheck.remainingMs / 6e4));
+      return res.status(429).json({
+        success: false,
+        error: `Trop de tentatives \xE9chou\xE9es. Compte temporairement verrouill\xE9 (${waitMin} min).`
+      });
+    }
+    const db = getDatabase();
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    const check = user ? verifyPassword(String(password), user.password) : { valid: false, needsRehash: false };
+    if (!user || !check.valid) {
+      const rec = recordAuthFailure(loginKey, ip, 5, 15 * 60 * 1e3, 15 * 60 * 1e3);
+      const isNowBlocked = rec.blockedUntil > Date.now();
+      recordSecurityEvent(db, {
+        category: "auth",
+        severity: isNowBlocked ? "critical" : "warning",
+        event: isNowBlocked ? "IP_BLOCKED_BRUTEFORCE" : "LOGIN_FAILED",
+        detail: isNowBlocked ? `Verrouillage 15 min apr\xE8s ${rec.count} \xE9checs de connexion.` : `Mot de passe incorrect (${rec.count}/5 avant blocage).`,
+        actor: cleanEmail,
+        ip
+      });
+      saveDatabase(db);
+      return res.status(isNowBlocked ? 429 : 401).json({
+        success: false,
+        error: isNowBlocked ? "Trop de tentatives \xE9chou\xE9es. Acc\xE8s bloqu\xE9 pendant 15 minutes." : "Email ou mot de passe incorrect."
+      });
+    }
+    clearRateKey(loginKey);
+    if (check.needsRehash) {
+      user.password = hashPassword(String(password));
+    }
+    if (user.role === "admin") {
+      recordSecurityEvent(db, {
+        category: "admin",
+        severity: "info",
+        event: "ADMIN_LOGIN",
+        detail: "Connexion valid\xE9e au back-office pharmacien.",
+        actor: user.email,
+        ip
+      });
+    }
+    saveDatabase(db);
+    const epoch = Number(db.securityConfig?.tokenEpoch || 1);
+    const token = signSessionToken({ id: user.id, email: user.email, role: user.role }, epoch);
+    res.cookie(SESSION_COOKIE_NAME, token, getSessionCookieOptions(req));
+    res.json({ success: true, token, user: sanitizeUser(user) });
+  });
+  app.post("/api/auth/register", async (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`register:${ip}`, "auth_register", ip, 5, 30 * 60 * 1e3, 30 * 60 * 1e3);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: "Trop de cr\xE9ations de comptes depuis cette adresse. R\xE9essayez plus tard."
+      });
+    }
+    const { name: name2, email, password, skinType = "Mixte \xE0 sensible" } = req.body;
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!name2 || !cleanEmail || !password || String(password).length < 6) {
+      return res.status(400).json({ success: false, error: "Nom, email valide et mot de passe (6+ caract\xE8res) requis." });
+    }
+    const db = getDatabase();
+    const existing = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return res.status(400).json({ success: false, error: "Cet email est d\xE9j\xE0 enregistr\xE9." });
+    }
+    const registrationDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const newUser = {
+      id: `usr-${Date.now()}`,
+      name: String(name2).trim().slice(0, 100),
+      email: cleanEmail,
+      password: hashPassword(String(password)),
+      role: "customer",
+      skinType: String(skinType || "Mixte \xE0 sensible").trim().slice(0, 80),
+      concerns: [],
+      savedAddresses: [],
+      createdAt: registrationDate
+    };
+    ensureUserReferralCode(newUser);
     db.users.push(newUser);
     saveDatabase(db);
-    res.json({ success: true, user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role } });
+    try {
+      const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES;
+      const adminTpl = templates.find((t) => t.id === "admin_new_customer");
+      const customRecipient = String(adminTpl?.recipientEmail || "").trim();
+      const adminRecipient = customRecipient && customRecipient.includes("@") ? customRecipient : process.env.SMTP_CONTACT_TO || SMTP_FROM_EMAIL;
+      const totalCustomers = db.users.filter((u) => u.role !== "admin").length;
+      await sendTemplatedEmail(
+        db,
+        "admin_new_customer",
+        adminRecipient,
+        {
+          customerName: newUser.name,
+          customerEmail: newUser.email,
+          skinType: newUser.skinType,
+          registrationDate,
+          customerId: newUser.id,
+          totalCustomers: String(totalCustomers)
+        },
+        req
+      );
+      saveDatabase(db);
+    } catch (err) {
+      console.error("[SMTP] Erreur notification nouvel inscrit:", err?.message || err);
+    }
+    const epoch = Number(db.securityConfig?.tokenEpoch || 1);
+    const token = signSessionToken({ id: newUser.id, email: newUser.email, role: "customer" }, epoch);
+    res.cookie(SESSION_COOKIE_NAME, token, getSessionCookieOptions(req));
+    res.json({ success: true, token, user: sanitizeUser(newUser) });
+  });
+  app.post("/api/auth/logout", (req, res) => {
+    const opts = getSessionCookieOptions(req);
+    res.clearCookie(SESSION_COOKIE_NAME, { httpOnly: opts.httpOnly, sameSite: opts.sameSite, secure: opts.secure });
+    res.json({ success: true });
+  });
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`forgot:${ip}`, "auth_forgot", ip, 4, 15 * 60 * 1e3, 15 * 60 * 1e3);
+    if (!rl.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: "Trop de demandes de r\xE9initialisation. Patienter 15 minutes."
+      });
+    }
+    const { email } = req.body;
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!cleanEmail) {
+      return res.status(400).json({ success: false, error: "Adresse email requise." });
+    }
+    const db = getDatabase();
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (user) {
+      const rawToken = import_crypto.default.randomBytes(24).toString("hex");
+      const tokenHash = import_crypto.default.createHash("sha256").update(rawToken).digest("hex");
+      db.resetTokens = db.resetTokens.filter((t) => t.email !== cleanEmail);
+      db.resetTokens.push({
+        email: cleanEmail,
+        tokenHash,
+        expiresAt: Date.now() + 60 * 60 * 1e3
+      });
+      recordSecurityEvent(db, {
+        category: "auth",
+        severity: "info",
+        event: "PASSWORD_RESET_REQUESTED",
+        detail: "Jeton temporaire de r\xE9initialisation g\xE9n\xE9r\xE9.",
+        actor: cleanEmail,
+        ip
+      });
+      saveDatabase(db);
+      const baseUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+      const resetUrl = `${baseUrl}/reset-password?email=${encodeURIComponent(cleanEmail)}&token=${rawToken}`;
+      console.log(`[Password Reset] Link generated for ${cleanEmail}: ${resetUrl}`);
+      try {
+        await smtpTransporter.sendMail({
+          from: smtpFromHeader,
+          to: cleanEmail,
+          subject: "R\xE9initialisation de votre mot de passe Myrlan",
+          text: `Bonjour,
+
+Cliquez sur le lien suivant pour r\xE9initialiser votre mot de passe (valide 1h) :
+${resetUrl}`
+        });
+      } catch (err) {
+        console.error("[SMTP] Erreur envoi reset-password:", err?.message || err);
+      }
+    }
+    res.json({
+      success: true,
+      message: "Si un compte correspond \xE0 cet email, un lien de r\xE9initialisation vient d\u2019\xEAtre envoy\xE9."
+    });
+  });
+  app.post("/api/auth/reset-password", (req, res) => {
+    const { email, token, newPassword } = req.body;
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!cleanEmail || !token || !newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, error: "Email, jeton valide et mot de passe (6+ caract\xE8res) requis." });
+    }
+    const db = getDatabase();
+    const tokenHash = import_crypto.default.createHash("sha256").update(String(token)).digest("hex");
+    const record = db.resetTokens.find(
+      (t) => t.email === cleanEmail && t.tokenHash === tokenHash && t.expiresAt > Date.now()
+    );
+    if (!record) {
+      return res.status(400).json({ success: false, error: "Lien de r\xE9initialisation invalide ou expir\xE9." });
+    }
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "Compte utilisateur introuvable." });
+    }
+    user.password = hashPassword(String(newPassword));
+    db.resetTokens = db.resetTokens.filter((t) => t.email !== cleanEmail);
+    recordSecurityEvent(db, {
+      category: "auth",
+      severity: "info",
+      event: "PASSWORD_RESET_COMPLETED",
+      detail: "Mot de passe r\xE9initialis\xE9 via jeton s\xE9curis\xE9.",
+      actor: cleanEmail,
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    res.json({ success: true, message: "Votre mot de passe a \xE9t\xE9 mis \xE0 jour avec succ\xE8s." });
+  });
+  app.post("/api/auth/change-password", requireAuth, (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ success: false, error: "Nouveau mot de passe (6+ caract\xE8res) requis." });
+    }
+    const db = getDatabase();
+    const user = db.users.find((u) => u.id === req.authUser.id);
+    if (!user) return res.status(404).json({ success: false, error: "Utilisateur introuvable." });
+    const check = verifyPassword(String(currentPassword), user.password);
+    if (!check.valid) {
+      return res.status(400).json({ success: false, error: "Mot de passe actuel incorrect." });
+    }
+    user.password = hashPassword(String(newPassword));
+    recordSecurityEvent(db, {
+      category: "auth",
+      severity: "info",
+      event: "PASSWORD_CHANGED",
+      detail: "Mot de passe modifi\xE9 par l\u2019utilisateur.",
+      actor: user.email,
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    res.json({ success: true, message: "Mot de passe modifi\xE9 avec succ\xE8s." });
+  });
+  app.put("/api/account/profile", requireAuth, (req, res) => {
+    const db = getDatabase();
+    const user = db.users.find((u) => u.id === req.authUser.id);
+    if (!user) return res.status(404).json({ success: false, error: "Utilisateur non trouv\xE9." });
+    const { name: name2, skinType, concerns, savedAddresses } = req.body;
+    if (name2 !== void 0) user.name = String(name2).trim();
+    if (skinType !== void 0) user.skinType = String(skinType);
+    if (Array.isArray(concerns)) user.concerns = concerns;
+    if (Array.isArray(savedAddresses)) user.savedAddresses = savedAddresses;
+    saveDatabase(db);
+    res.json({ success: true, user: sanitizeUser(user) });
+  });
+  app.get("/api/admin/users", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    const summaries = db.users.map((u) => {
+      const userOrders = db.orders.filter(
+        (o) => o.userId === u.id || o.shippingAddress?.email?.toLowerCase() === u.email.toLowerCase()
+      );
+      const totalSpent = userOrders.reduce((acc, o) => acc + (Number(o.totalAmount) || 0), 0);
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt || "2026-01-01",
+        ordersCount: userOrders.length,
+        totalSpent: Number(totalSpent.toFixed(2))
+      };
+    });
+    res.json(summaries);
   });
   app.post("/api/send-email", async (req, res) => {
     try {
-      const { to, subject, message, orderId } = req.body;
-      console.log(`[SMTP Email Sent to ${to}] Subject: ${subject} | Order: ${orderId}`);
+      const { to, subject, message } = req.body;
       try {
         await smtpTransporter.sendMail({
-          from: '"Myrlan Parapharmacie" <noreply@myrlan.fr>',
+          from: smtpFromHeader,
           to: to || "client@example.com",
           subject: subject || "Confirmation de commande Myrlan",
-          text: message || "Votre commande a bien \xE9t\xE9 prise en compte.",
-          html: `<div style="font-family:Arial,sans-serif;padding:20px;color:#333;">
-            <h2 style="color:#1d4ed8;">Myrlan - Parapharmacie en Ligne</h2>
-            <p>${message}</p>
-            <hr style="border:none;border-top:1px solid #eee;margin:20px 0;"/>
-            <p style="font-size:12px;color:#666;">Ceci est un email automatique, serveur s\xE9curis\xE9 Myrlan.</p>
-          </div>`
+          text: message || "Votre commande a bien \xE9t\xE9 prise en compte."
         });
-      } catch (smtpErr) {
-        console.warn("SMTP transport fallback simulation active:", smtpErr);
+      } catch (err) {
+        console.error("[SMTP] Erreur /api/send-email:", err?.message || err);
       }
       res.json({ success: true, message: "Email envoy\xE9 avec succ\xE8s via le serveur SMTP." });
     } catch (err) {
@@ -60941,34 +63946,1271 @@ async function startServer() {
   });
   app.post("/api/create-payment-intent", async (req, res) => {
     try {
-      const { amount, paymentMethodType, currency = "eur" } = req.body;
-      const clientSecret = `seti_${Math.random().toString(36).substring(7)}_secret_${Math.random().toString(36).substring(7)}`;
+      const { paymentMethodType } = req.body;
+      const clientSecret = `seti_${import_crypto.default.randomBytes(6).toString("hex")}_secret_${import_crypto.default.randomBytes(6).toString("hex")}`;
       res.json({
         success: true,
         clientSecret,
         paymentMethodType: paymentMethodType || "card",
         status: "succeeded",
-        message: `Paiement ${paymentMethodType} valid\xE9 avec succ\xE8s via le serveur Stripe.`
+        message: `Paiement ${paymentMethodType} valid\xE9 avec succ\xE8s.`
       });
     } catch (err) {
       res.status(500).json({ success: false, error: err.message });
     }
   });
-  if (process.env.NODE_ENV !== "production") {
+  app.get("/sitemap.xml", (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const xml = buildSitemapXml(db, baseUrl);
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.send(xml);
+  });
+  app.get("/robots.txt", (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const txt = buildRobotsTxt(db, baseUrl);
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(txt);
+  });
+  app.get("/api/webmaster/public", (_req, res) => {
+    const db = getDatabase();
+    const wm = db.webmaster || DEFAULT_WEBMASTER_CONFIG;
+    res.json({
+      siteTitle: wm.siteTitle,
+      siteDescription: wm.siteDescription,
+      canonicalBaseUrl: wm.canonicalBaseUrl,
+      ogImageUrl: wm.ogImageUrl,
+      googleSiteVerification: wm.googleSiteVerification,
+      bingSiteVerification: wm.bingSiteVerification,
+      gaMeasurementId: wm.gaMeasurementId,
+      enablePharmacyJsonLd: wm.enablePharmacyJsonLd,
+      enableProductJsonLd: wm.enableProductJsonLd,
+      redirects: (wm.redirects || []).filter((r) => r.active)
+    });
+  });
+  app.get("/api/design/public", (_req, res) => {
+    const db = getDatabase();
+    res.json(db.design || DEFAULT_DESIGN_CONFIG);
+  });
+  app.get("/api/admin/design", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      config: db.design || DEFAULT_DESIGN_CONFIG,
+      availableHeroes: HERO_PRESET_IDS
+    });
+  });
+  app.put("/api/admin/design", requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const body = req.body || {};
+    const current = db.design || { ...DEFAULT_DESIGN_CONFIG };
+    const requestedHero = String(body.activeHeroId ?? current.activeHeroId).trim();
+    if (!HERO_PRESET_IDS.includes(requestedHero)) {
+      return res.status(400).json({
+        success: false,
+        error: "Mod\xE8le Hero inconnu."
+      });
+    }
+    const updated = {
+      ...current,
+      activeHeroId: requestedHero,
+      customBadge: String(body.customBadge ?? current.customBadge ?? "").trim().slice(0, 90),
+      customTitle: String(body.customTitle ?? current.customTitle ?? "").trim().slice(0, 140),
+      customSubtitle: String(body.customSubtitle ?? current.customSubtitle ?? "").trim().slice(0, 320),
+      customPrimaryCtaLabel: String(body.customPrimaryCtaLabel ?? current.customPrimaryCtaLabel ?? "").trim().slice(0, 60),
+      showTrustBar: body.showTrustBar !== void 0 ? Boolean(body.showTrustBar) : current.showTrustBar !== false,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+    };
+    db.design = updated;
+    saveDatabase(db);
+    io2.emit("design-updated", updated);
+    res.json({
+      success: true,
+      config: updated
+    });
+  });
+  app.get("/api/admin/email-templates", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      templates: db.emailTemplates || DEFAULT_EMAIL_TEMPLATES,
+      logs: (db.emailLogs || []).slice(0, 50),
+      sampleVariables: SAMPLE_EMAIL_VARIABLES
+    });
+  });
+  app.put("/api/admin/email-templates/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const body = req.body || {};
+    const db = getDatabase();
+    const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES.map((t) => ({ ...t }));
+    const idx = templates.findIndex((t) => t.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: "Mod\xE8le email introuvable." });
+    }
+    const current = templates[idx];
+    const safeColor = /^#[0-9a-fA-F]{6}$/.test(String(body.accentColor || "")) ? String(body.accentColor) : current.accentColor;
+    const safePath = String(body.ctaPath ?? current.ctaPath ?? "/").trim();
+    const normalizedPath = safePath.startsWith("/") ? safePath.slice(0, 120) : current.ctaPath;
+    const rawRecipient = body.recipientEmail !== void 0 ? String(body.recipientEmail || "").trim().slice(0, 160) : current.recipientEmail;
+    const validRecipient = rawRecipient && rawRecipient.includes("@") ? rawRecipient : current.recipientEmail;
+    const updated = {
+      ...current,
+      enabled: body.enabled !== void 0 ? Boolean(body.enabled) : current.enabled,
+      ...validRecipient !== void 0 ? { recipientEmail: validRecipient } : {},
+      subject: String(body.subject ?? current.subject).trim().slice(0, 160) || current.subject,
+      heading: String(body.heading ?? current.heading).trim().slice(0, 180) || current.heading,
+      body: String(body.body ?? current.body).trim().slice(0, 3e3) || current.body,
+      ctaLabel: String(body.ctaLabel ?? current.ctaLabel).trim().slice(0, 60) || current.ctaLabel,
+      ctaPath: normalizedPath,
+      accentColor: safeColor,
+      footerNote: String(body.footerNote ?? current.footerNote).trim().slice(0, 300),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+    };
+    templates[idx] = updated;
+    db.emailTemplates = templates;
+    saveDatabase(db);
+    res.json({ success: true, template: updated });
+  });
+  app.post("/api/admin/email-templates/:id/reset", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const defTpl = DEFAULT_EMAIL_TEMPLATES.find((t) => t.id === id);
+    if (!defTpl) {
+      return res.status(404).json({ success: false, error: "Mod\xE8le email introuvable." });
+    }
+    const db = getDatabase();
+    const templates = Array.isArray(db.emailTemplates) ? db.emailTemplates : DEFAULT_EMAIL_TEMPLATES.map((t) => ({ ...t }));
+    const idx = templates.findIndex((t) => t.id === id);
+    const resetTpl = { ...defTpl, updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0] };
+    if (idx === -1) templates.push(resetTpl);
+    else templates[idx] = resetTpl;
+    db.emailTemplates = templates;
+    saveDatabase(db);
+    res.json({ success: true, template: resetTpl });
+  });
+  app.post("/api/admin/email-templates/:id/test", requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { to, draft } = req.body || {};
+    const db = getDatabase();
+    const baseTpl = (db.emailTemplates || DEFAULT_EMAIL_TEMPLATES).find((t) => t.id === id);
+    if (!baseTpl) {
+      return res.status(404).json({ success: false, error: "Mod\xE8le email introuvable." });
+    }
+    const recipient = String(to || req.authUser?.email || "").trim();
+    if (!recipient || !recipient.includes("@")) {
+      return res.status(400).json({ success: false, error: "Adresse email de test invalide." });
+    }
+    const overrideTemplate = draft && typeof draft === "object" ? {
+      ...baseTpl,
+      subject: String(draft.subject ?? baseTpl.subject).slice(0, 160),
+      heading: String(draft.heading ?? baseTpl.heading).slice(0, 180),
+      body: String(draft.body ?? baseTpl.body).slice(0, 3e3),
+      ctaLabel: String(draft.ctaLabel ?? baseTpl.ctaLabel).slice(0, 60),
+      ctaPath: String(draft.ctaPath ?? baseTpl.ctaPath).startsWith("/") ? String(draft.ctaPath) : baseTpl.ctaPath,
+      accentColor: /^#[0-9a-fA-F]{6}$/.test(String(draft.accentColor || "")) ? draft.accentColor : baseTpl.accentColor,
+      footerNote: String(draft.footerNote ?? baseTpl.footerNote).slice(0, 300)
+    } : void 0;
+    const result = await sendTemplatedEmail(
+      db,
+      id,
+      recipient,
+      SAMPLE_EMAIL_VARIABLES,
+      req,
+      overrideTemplate
+    );
+    saveDatabase(db);
+    res.json({
+      success: true,
+      logEntry: result?.logEntry,
+      smtpError: result?.smtpError || void 0,
+      logs: (db.emailLogs || []).slice(0, 50)
+    });
+  });
+  app.get("/api/admin/webmaster", requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const sitemapXml = buildSitemapXml(db, baseUrl);
+    const robotsPreview = buildRobotsTxt(db, baseUrl);
+    const productUrlsCount = db.webmaster?.sitemapIncludeProducts !== false ? db.products.length : 0;
+    const publicPagesCount = PUBLIC_STOREFRONT_ROUTES.length;
+    res.json({
+      config: db.webmaster,
+      resolvedBaseUrl: baseUrl,
+      sitemapXml,
+      robotsPreview,
+      defaultRobotsTxt: DEFAULT_ROBOTS_TXT,
+      stats: {
+        publicPagesCount,
+        productUrlsCount,
+        sitemapUrlsCount: publicPagesCount + productUrlsCount,
+        activeRedirectsCount: (db.webmaster?.redirects || []).filter((r) => r.active).length
+      }
+    });
+  });
+  app.put("/api/admin/webmaster", requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const body = req.body || {};
+    const current = db.webmaster || { ...DEFAULT_WEBMASTER_CONFIG, redirects: [] };
+    const gaId = String(body.gaMeasurementId ?? current.gaMeasurementId ?? "").trim().toUpperCase();
+    if (gaId && !/^(G|GT|GTM)-[A-Z0-9]{4,16}$/.test(gaId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Identifiant Analytics invalide (format attendu : G-XXXXXXXXXX ou GTM-XXXXXXX)."
+      });
+    }
+    const canonicalRaw = String(body.canonicalBaseUrl ?? current.canonicalBaseUrl ?? "").trim().replace(/\/+$/, "");
+    if (canonicalRaw && !/^https?:\/\/[a-zA-Z0-9.-]+(:\d+)?$/.test(canonicalRaw)) {
+      return res.status(400).json({
+        success: false,
+        error: "URL canonique invalide (exemple : https://www.myrlan.fr)."
+      });
+    }
+    const ogImgRaw = String(body.ogImageUrl ?? current.ogImageUrl ?? "").trim();
+    if (ogImgRaw && !ogImgRaw.startsWith("/") && !/^https?:\/\//i.test(ogImgRaw)) {
+      return res.status(400).json({
+        success: false,
+        error: "URL image OpenGraph invalide (utilisez https://... ou un chemin /uploads/...)."
+      });
+    }
+    const changeFreq = ["daily", "weekly", "monthly"].includes(body.sitemapChangeFreq) ? body.sitemapChangeFreq : current.sitemapChangeFreq;
+    const updated = {
+      ...current,
+      siteTitle: String(body.siteTitle ?? current.siteTitle).trim().slice(0, 120) || DEFAULT_WEBMASTER_CONFIG.siteTitle,
+      siteDescription: String(body.siteDescription ?? current.siteDescription).trim().slice(0, 320) || DEFAULT_WEBMASTER_CONFIG.siteDescription,
+      canonicalBaseUrl: canonicalRaw,
+      ogImageUrl: ogImgRaw,
+      googleSiteVerification: String(body.googleSiteVerification ?? current.googleSiteVerification ?? "").trim().slice(0, 160),
+      bingSiteVerification: String(body.bingSiteVerification ?? current.bingSiteVerification ?? "").trim().slice(0, 160),
+      gaMeasurementId: gaId,
+      robotsTxt: String(body.robotsTxt ?? current.robotsTxt ?? DEFAULT_ROBOTS_TXT).slice(0, 8e3),
+      sitemapIncludeProducts: body.sitemapIncludeProducts !== void 0 ? Boolean(body.sitemapIncludeProducts) : current.sitemapIncludeProducts,
+      sitemapChangeFreq: changeFreq,
+      enablePharmacyJsonLd: body.enablePharmacyJsonLd !== void 0 ? Boolean(body.enablePharmacyJsonLd) : current.enablePharmacyJsonLd,
+      enableProductJsonLd: body.enableProductJsonLd !== void 0 ? Boolean(body.enableProductJsonLd) : current.enableProductJsonLd,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+    };
+    db.webmaster = updated;
+    saveDatabase(db);
+    const baseUrl = resolveBaseUrl(req, updated);
+    io2.emit("webmaster-updated", updated);
+    res.json({
+      success: true,
+      config: updated,
+      resolvedBaseUrl: baseUrl,
+      sitemapXml: buildSitemapXml(db, baseUrl),
+      robotsPreview: buildRobotsTxt(db, baseUrl)
+    });
+  });
+  app.post("/api/admin/webmaster/redirects", requireAdmin, (req, res) => {
+    const { fromPath, toPath, statusCode = 301 } = req.body || {};
+    const cleanFrom = normalizeInternalPath(fromPath);
+    const cleanTo = normalizeInternalPath(toPath);
+    if (!cleanFrom || !cleanTo) {
+      return res.status(400).json({
+        success: false,
+        error: "Les chemins source et cible doivent commencer par / (ex: /ancien-produit \u2192 /)."
+      });
+    }
+    if (cleanFrom === cleanTo) {
+      return res.status(400).json({
+        success: false,
+        error: "Le chemin source et la destination doivent \xEAtre diff\xE9rents."
+      });
+    }
+    if (cleanFrom.startsWith("/api") || cleanFrom === "/admin" || cleanFrom === "/sitemap.xml" || cleanFrom === "/robots.txt") {
+      return res.status(400).json({
+        success: false,
+        error: "Impossible de rediriger une route syst\xE8me (/api, /admin, /sitemap.xml, /robots.txt)."
+      });
+    }
+    const db = getDatabase();
+    const list = db.webmaster.redirects || [];
+    if (list.some((r) => r.fromPath === cleanFrom)) {
+      return res.status(400).json({
+        success: false,
+        error: `Une redirection existe d\xE9j\xE0 pour ${cleanFrom}.`
+      });
+    }
+    const rule = {
+      id: `redir-${Date.now()}`,
+      fromPath: cleanFrom,
+      toPath: cleanTo,
+      statusCode: Number(statusCode) === 302 ? 302 : 301,
+      active: true,
+      hits: 0,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+    };
+    db.webmaster.redirects = [rule, ...list];
+    db.webmaster.updatedAt = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    saveDatabase(db);
+    io2.emit("webmaster-updated", db.webmaster);
+    res.json({ success: true, redirect: rule, redirects: db.webmaster.redirects });
+  });
+  app.patch("/api/admin/webmaster/redirects/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    const list = db.webmaster.redirects || [];
+    const rule = list.find((r) => r.id === id);
+    if (!rule) {
+      return res.status(404).json({ success: false, error: "Redirection introuvable." });
+    }
+    if (req.body?.active !== void 0) rule.active = Boolean(req.body.active);
+    if (req.body?.statusCode !== void 0) rule.statusCode = Number(req.body.statusCode) === 302 ? 302 : 301;
+    saveDatabase(db);
+    io2.emit("webmaster-updated", db.webmaster);
+    res.json({ success: true, redirect: rule, redirects: list });
+  });
+  app.delete("/api/admin/webmaster/redirects/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    db.webmaster.redirects = (db.webmaster.redirects || []).filter((r) => r.id !== id);
+    saveDatabase(db);
+    io2.emit("webmaster-updated", db.webmaster);
+    res.json({ success: true, redirects: db.webmaster.redirects });
+  });
+  app.get("/api/maintenance", (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      success: true,
+      maintenance: db.maintenanceConfig || DEFAULT_MAINTENANCE_CONFIG
+    });
+  });
+  app.put("/api/admin/maintenance", requireAdmin, (req, res) => {
+    const { enabled, message } = req.body || {};
+    const db = getDatabase();
+    const current = db.maintenanceConfig || { ...DEFAULT_MAINTENANCE_CONFIG };
+    const updated = {
+      ...current,
+      enabled: enabled !== void 0 ? Boolean(enabled) : current.enabled,
+      message: message !== void 0 ? String(message).trim().slice(0, 500) : current.message,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+    };
+    db.maintenanceConfig = updated;
+    saveDatabase(db);
+    io2.emit("maintenance-updated", updated);
+    res.json({ success: true, maintenance: updated });
+  });
+  app.post("/api/admin/webmaster/check-urls", requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const checks = [];
+    const sitemapXml = buildSitemapXml(db, baseUrl);
+    const robotsTxt = buildRobotsTxt(db, baseUrl);
+    checks.push({
+      url: "/sitemap.xml",
+      label: "Sitemap XML dynamique",
+      category: "Fichier SEO",
+      status: 200,
+      ok: sitemapXml.includes("<urlset") && sitemapXml.includes("<loc>"),
+      note: `${(sitemapXml.match(/<url>/g) || []).length} URL(s) index\xE9es`
+    });
+    checks.push({
+      url: "/robots.txt",
+      label: "Fichier robots.txt",
+      category: "Fichier SEO",
+      status: 200,
+      ok: robotsTxt.includes("User-agent:"),
+      note: robotsTxt.includes("Sitemap:") ? "Directive Sitemap pr\xE9sente" : "Directive Sitemap absente"
+    });
+    for (const r of PUBLIC_STOREFRONT_ROUTES) {
+      checks.push({
+        url: r.path,
+        label: r.label,
+        category: "Page",
+        status: 200,
+        ok: true,
+        note: `Priorit\xE9 ${r.priority} \xB7 ${r.changefreq}`
+      });
+    }
+    for (const p of db.products) {
+      const hasDesc = Boolean(p.description && String(p.description).trim().length >= 30);
+      const hasValidEan = /^\d{8,14}$/.test(String(p.ean || "").trim());
+      checks.push({
+        url: `/produit/${p.id}`,
+        label: p.name,
+        category: "Produit",
+        status: hasDesc && hasValidEan ? 200 : "OK",
+        ok: hasDesc && hasValidEan,
+        note: !hasDesc ? "Description courte \xE0 enrichir" : !hasValidEan ? "Code EAN manquant ou invalide" : `EAN ${p.ean} \xB7 Stock ${p.stock}`
+      });
+      const img = String(p.image || "").trim();
+      if (img.startsWith("/uploads/")) {
+        const fileName = import_path.default.basename(img);
+        const resolved = import_path.default.resolve(uploadsDir, fileName);
+        const exists = resolved.startsWith(uploadsDir + import_path.default.sep) && import_fs.default.existsSync(resolved);
+        checks.push({
+          url: img,
+          label: `Image \xB7 ${p.name}`,
+          category: "M\xE9dia",
+          status: exists ? 200 : 404,
+          ok: exists,
+          note: exists ? "Fichier local pr\xE9sent" : "Fichier introuvable sur le serveur"
+        });
+      } else if (!img || !img.startsWith("https://") && !img.startsWith("http://") && !img.startsWith("/")) {
+        checks.push({
+          url: img || "(aucune image)",
+          label: `Image \xB7 ${p.name}`,
+          category: "M\xE9dia",
+          status: "Erreur",
+          ok: false,
+          note: "URL image manquante ou invalide"
+        });
+      }
+    }
+    res.json({ success: true, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), checks });
+  });
+  app.get("/api/admin/webmaster/export", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    const sanitizedExport = {
+      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      products: db.products,
+      orders: db.orders,
+      promoCodes: db.promoCodes,
+      prescriptions: db.prescriptions,
+      contactMessages: db.contactMessages,
+      appointments: db.appointments,
+      webmaster: db.webmaster,
+      users: (db.users || []).map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt
+      }))
+    };
+    const filename = `myrlan-backup-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.json`;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(sanitizedExport, null, 2));
+  });
+  app.get("/api/appointments/slots", (req, res) => {
+    const date = String(req.query.date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ success: false, error: "Date invalide (AAAA-MM-JJ)." });
+    }
+    const db = getDatabase();
+    const bookedSlots = (db.appointments || []).filter((a) => a.date === date && a.status !== "Annul\xE9").map((a) => a.timeSlot);
+    res.json({ date, allSlots: APPOINTMENT_TIME_SLOTS, bookedSlots });
+  });
+  app.get("/api/appointments/mine", requireAuth, (req, res) => {
+    const db = getDatabase();
+    const emailLower = req.authUser.email.toLowerCase();
+    const list = (db.appointments || []).filter(
+      (a) => a.userId === req.authUser.id || String(a.patientEmail || "").toLowerCase() === emailLower
+    );
+    res.json(list);
+  });
+  app.post("/api/appointments", async (req, res) => {
+    const ip = getClientIp(req);
+    const { serviceType, format, date, timeSlot, patientName, patientEmail, patientPhone, notes, website } = req.body || {};
+    if (website && String(website).trim().length > 0) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "APPOINTMENT_HONEYPOT_TRIGGERED",
+        detail: "R\xE9servation automatis\xE9e bloqu\xE9e via champ pi\xE8ge (anti-engorgement agenda).",
+        actor: String(patientEmail || "bot"),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(400).json({ success: false, error: "Requ\xEAte rejet\xE9e par le contr\xF4le anti-robot." });
+    }
+    const rate = checkRateLimit(`appointments:${ip}`, "appointments", ip, 10, 15 * 60 * 1e3, 15 * 60 * 1e3, true);
+    if (!rate.allowed) {
+      const dbLog = getDatabase();
+      recordSecurityEvent(dbLog, {
+        category: "anti_sabotage",
+        severity: "warning",
+        event: "APPOINTMENT_FLOOD_BLOCKED",
+        detail: "Tentative de saturation des cr\xE9neaux de rendez-vous officinaux bloqu\xE9e.",
+        actor: String(patientEmail || "anonyme"),
+        ip
+      });
+      saveDatabase(dbLog);
+      return res.status(429).json({
+        success: false,
+        error: "Trop de r\xE9servations en peu de temps. Merci de patienter 15 minutes."
+      });
+    }
+    const service = APPOINTMENT_SERVICES[String(serviceType || "")];
+    if (!service) {
+      return res.status(400).json({ success: false, error: "Motif de rendez-vous invalide." });
+    }
+    const cleanFormat = format === "visio" ? "visio" : "officine";
+    const cleanDate = String(date || "").trim();
+    const cleanSlot = String(timeSlot || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+      return res.status(400).json({ success: false, error: "Veuillez choisir une date valide." });
+    }
+    if (!APPOINTMENT_TIME_SLOTS.includes(cleanSlot)) {
+      return res.status(400).json({ success: false, error: "Cr\xE9neau horaire invalide." });
+    }
+    const cleanName = String(patientName || "").trim().slice(0, 100);
+    const cleanEmail = String(patientEmail || "").trim().slice(0, 120);
+    const cleanPhone = String(patientPhone || "").trim().slice(0, 30);
+    if (!cleanName || !cleanEmail.includes("@") || !cleanPhone) {
+      return res.status(400).json({ success: false, error: "Nom, email et t\xE9l\xE9phone sont requis." });
+    }
+    const db = getDatabase();
+    const conflict = (db.appointments || []).some(
+      (a) => a.date === cleanDate && a.timeSlot === cleanSlot && a.status !== "Annul\xE9"
+    );
+    if (conflict) {
+      return res.status(409).json({
+        success: false,
+        error: "Ce cr\xE9neau vient d\u2019\xEAtre r\xE9serv\xE9. Veuillez choisir une autre heure."
+      });
+    }
+    const appointment = {
+      id: `RDV-${Math.floor(1e3 + Math.random() * 9e3)}`,
+      serviceType: String(serviceType),
+      serviceLabel: service.label,
+      durationMinutes: service.durationMinutes,
+      format: cleanFormat,
+      date: cleanDate,
+      timeSlot: cleanSlot,
+      patientName: cleanName,
+      patientEmail: cleanEmail,
+      patientPhone: cleanPhone,
+      notes: String(notes || "").trim().slice(0, 500),
+      pharmacistNote: "",
+      status: "Confirm\xE9",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16),
+      userId: req.authUser?.id
+    };
+    db.appointments.unshift(appointment);
+    await sendTemplatedEmail(
+      db,
+      "appointment_confirmed",
+      appointment.patientEmail,
+      {
+        patientName: appointment.patientName,
+        appointmentId: appointment.id,
+        serviceLabel: appointment.serviceLabel,
+        appointmentDate: appointment.date,
+        appointmentSlot: appointment.timeSlot,
+        appointmentFormat: appointment.format === "visio" ? "T\xE9l\xE9conseil visio" : "\xC0 l\u2019officine"
+      },
+      req
+    );
+    saveDatabase(db);
+    io2.emit("appointments-updated", db.appointments);
+    res.json({ success: true, appointment });
+  });
+  app.patch("/api/appointments/:id/cancel", requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    const appt = (db.appointments || []).find((a) => a.id === id);
+    if (!appt) {
+      return res.status(404).json({ success: false, error: "Rendez-vous introuvable." });
+    }
+    const isOwner = req.authUser.role === "admin" || appt.userId === req.authUser.id || String(appt.patientEmail || "").toLowerCase() === req.authUser.email.toLowerCase();
+    if (!isOwner) {
+      return res.status(403).json({ success: false, error: "Acc\xE8s non autoris\xE9." });
+    }
+    const prevStatus = appt.status;
+    appt.status = "Annul\xE9";
+    if (prevStatus !== "Annul\xE9") {
+      await sendTemplatedEmail(
+        db,
+        "appointment_cancelled",
+        String(appt.patientEmail || ""),
+        {
+          patientName: String(appt.patientName || "Patient"),
+          appointmentId: appt.id,
+          serviceLabel: String(appt.serviceLabel || ""),
+          appointmentDate: String(appt.date || ""),
+          appointmentSlot: String(appt.timeSlot || ""),
+          appointmentFormat: appt.format === "visio" ? "T\xE9l\xE9conseil visio" : "\xC0 l\u2019officine",
+          pharmacistNote: String(appt.pharmacistNote || "Annul\xE9 depuis l\u2019espace patient.")
+        },
+        req
+      );
+    }
+    saveDatabase(db);
+    io2.emit("appointments-updated", db.appointments);
+    res.json({ success: true, appointment: appt });
+  });
+  app.get("/api/admin/appointments", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json(db.appointments || []);
+  });
+  app.patch("/api/admin/appointments/:id", requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { status, pharmacistNote } = req.body || {};
+    const allowedStatuses = ["Confirm\xE9", "Termin\xE9", "Annul\xE9"];
+    const db = getDatabase();
+    const appt = (db.appointments || []).find((a) => a.id === id);
+    if (!appt) {
+      return res.status(404).json({ success: false, error: "Rendez-vous introuvable." });
+    }
+    const prevStatus = appt.status;
+    if (status !== void 0) {
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ success: false, error: "Statut invalide." });
+      }
+      appt.status = status;
+    }
+    if (pharmacistNote !== void 0) {
+      appt.pharmacistNote = String(pharmacistNote).trim().slice(0, 500);
+    }
+    if (status !== void 0 && status !== prevStatus) {
+      const apptVars = {
+        patientName: String(appt.patientName || "Patient"),
+        appointmentId: appt.id,
+        serviceLabel: String(appt.serviceLabel || ""),
+        appointmentDate: String(appt.date || ""),
+        appointmentSlot: String(appt.timeSlot || ""),
+        appointmentFormat: appt.format === "visio" ? "T\xE9l\xE9conseil visio" : "\xC0 l\u2019officine",
+        pharmacistNote: String(appt.pharmacistNote || "Aucune remarque compl\xE9mentaire.")
+      };
+      if (status === "Confirm\xE9") {
+        await sendTemplatedEmail(db, "appointment_confirmed", String(appt.patientEmail || ""), apptVars, req);
+      } else if (status === "Termin\xE9") {
+        await sendTemplatedEmail(db, "appointment_completed", String(appt.patientEmail || ""), apptVars, req);
+      } else if (status === "Annul\xE9") {
+        await sendTemplatedEmail(db, "appointment_cancelled", String(appt.patientEmail || ""), apptVars, req);
+      }
+    }
+    saveDatabase(db);
+    io2.emit("appointments-updated", db.appointments);
+    res.json({ success: true, appointment: appt });
+  });
+  app.get("/.well-known/security.txt", (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3).toISOString();
+    const body = `Contact: mailto:securite@myrlan.fr
+Expires: ${expires}
+Preferred-Languages: fr, en
+Canonical: ${baseUrl}/.well-known/security.txt
+Policy: ${baseUrl}/confidentialite
+`;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(body);
+  });
+  app.get("/api/security/public", (req, res) => {
+    const db = getDatabase();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    res.json({
+      officialBrand: "Myrlan Parapharmacie & Pharmacie",
+      canonicalBaseUrl: db.webmaster?.canonicalBaseUrl || baseUrl,
+      maxCodGuestAmount: Number(db.securityConfig?.maxCodGuestAmount || 250),
+      antiPhishingNotice: "Myrlan ne vous demandera jamais votre mot de passe, code SMS ou num\xE9ro de carte bancaire par email, t\xE9l\xE9phone ou lien externe."
+    });
+  });
+  app.get("/api/admin/security", requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const now = Date.now();
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const activeBlocks = [];
+    for (const [key, entry] of securityRateMap.entries()) {
+      if (entry.blockedUntil > now) {
+        activeBlocks.push({
+          key,
+          scope: entry.scope,
+          ip: entry.ip,
+          attempts: entry.count,
+          blockedUntil: new Date(entry.blockedUntil).toISOString().replace("T", " ").substring(0, 19),
+          remainingMinutes: Math.max(1, Math.ceil((entry.blockedUntil - now) / 6e4))
+        });
+      }
+    }
+    const logs = Array.isArray(db.securityLogs) ? db.securityLogs : [];
+    const failedLogins24h = logs.filter((l) => l.event === "LOGIN_FAILED" || l.event === "IP_BLOCKED_BRUTEFORCE").length;
+    const blockedBotsOrFlood24h = logs.filter((l) => l.category === "anti_sabotage").length;
+    const weakAdminEmails = [];
+    for (const u of db.users || []) {
+      if (u.role !== "admin") continue;
+      if (WEAK_PASSWORDS.some((weak) => verifyPassword(weak, u.password).valid)) {
+        weakAdminEmails.push(u.email);
+      }
+    }
+    const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1e3).toISOString();
+    const securityTxtPreview = `Contact: mailto:securite@myrlan.fr
+Expires: ${expires}
+Preferred-Languages: fr, en
+Canonical: ${baseUrl}/.well-known/security.txt
+Policy: ${baseUrl}/confidentialite`;
+    res.json({
+      config: db.securityConfig,
+      stats: {
+        activeBlocksCount: activeBlocks.length,
+        failedLogins24h,
+        blockedBotsOrFlood24h,
+        protectedPrescriptionsCount: (db.prescriptions || []).length,
+        weakAdminAccountsCount: weakAdminEmails.length
+      },
+      weakAdminEmails,
+      activeBlocks,
+      logs: logs.slice(0, 80),
+      securityTxtPreview,
+      headersEnabled: [
+        { name: "Coffre Ordonnances Priv\xE9", value: "Acc\xE8s authentifi\xE9 strict (/api/prescriptions/:id/file)" },
+        { name: "Anti-Brute Force Auth", value: "Blocage 15 min apr\xE8s 5 \xE9checs de connexion" },
+        { name: "Content-Security-Policy", value: "Strict self + Google Analytics autoris\xE9" },
+        { name: "X-Content-Type-Options", value: "nosniff" },
+        { name: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { name: "Socket.IO CORS", value: "Origines autoris\xE9es uniquement" }
+      ]
+    });
+  });
+  app.post("/api/admin/security/unblock", requireAdmin, (req, res) => {
+    const { key } = req.body || {};
+    if (!key) {
+      return res.status(400).json({ success: false, error: "Cl\xE9 de blocage requise." });
+    }
+    clearRateKey(String(key));
+    const db = getDatabase();
+    recordSecurityEvent(db, {
+      category: "admin",
+      severity: "info",
+      event: "IP_UNBLOCKED_ADMIN",
+      detail: `D\xE9blocage manuel effectu\xE9 (${String(key).slice(0, 60)}).`,
+      actor: req.authUser?.email || "Admin",
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    res.json({ success: true });
+  });
+  app.post("/api/admin/security/revoke-sessions", requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const nextEpoch = Number(db.securityConfig?.tokenEpoch || 1) + 1;
+    db.securityConfig = {
+      ...db.securityConfig || {},
+      tokenEpoch: nextEpoch
+    };
+    recordSecurityEvent(db, {
+      category: "admin",
+      severity: "critical",
+      event: "SESSIONS_REVOKED",
+      detail: `Toutes les sessions ant\xE9rieures ont \xE9t\xE9 r\xE9voqu\xE9es (epoch ${nextEpoch}).`,
+      actor: req.authUser?.email || "Admin",
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    const freshToken = signSessionToken(
+      { id: req.authUser.id, email: req.authUser.email, role: req.authUser.role },
+      nextEpoch
+    );
+    res.cookie(SESSION_COOKIE_NAME, freshToken, getSessionCookieOptions(req));
+    res.json({ success: true, tokenEpoch: nextEpoch, token: freshToken });
+  });
+  app.patch("/api/admin/security/config", requireAdmin, (req, res) => {
+    const { maxCodGuestAmount, maxOrderQtyPerItem, maxOrderTotalItems } = req.body || {};
+    const db = getDatabase();
+    const cfg = db.securityConfig || { tokenEpoch: 1 };
+    if (maxCodGuestAmount !== void 0) {
+      cfg.maxCodGuestAmount = Math.max(50, Math.min(2e3, Number(maxCodGuestAmount) || 250));
+    }
+    if (maxOrderQtyPerItem !== void 0) {
+      cfg.maxOrderQtyPerItem = Math.max(1, Math.min(50, Number(maxOrderQtyPerItem) || 10));
+    }
+    if (maxOrderTotalItems !== void 0) {
+      cfg.maxOrderTotalItems = Math.max(1, Math.min(100, Number(maxOrderTotalItems) || 30));
+    }
+    db.securityConfig = cfg;
+    recordSecurityEvent(db, {
+      category: "admin",
+      severity: "info",
+      event: "SECURITY_POLICY_UPDATED",
+      detail: `Plafonds anti-sabotage mis \xE0 jour (COD invit\xE9 ${cfg.maxCodGuestAmount}\u20AC, max/article ${cfg.maxOrderQtyPerItem}).`,
+      actor: req.authUser?.email || "Admin",
+      ip: getClientIp(req)
+    });
+    saveDatabase(db);
+    res.json({ success: true, config: cfg });
+  });
+  app.post("/api/stock-alerts", (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`stock-alert:${ip}`, "stock_alert", ip, 15, 15 * 60 * 1e3, 15 * 60 * 1e3);
+    if (!rl.allowed) {
+      return res.status(429).json({ success: false, error: "Trop de demandes r\xE9centes. Patienter quelques minutes." });
+    }
+    const { productId, email } = req.body || {};
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: "Veuillez saisir une adresse email valide." });
+    }
+    const db = getDatabase();
+    const product = db.products.find((p) => p.id === productId);
+    if (!product) {
+      return res.status(404).json({ success: false, error: "Produit introuvable." });
+    }
+    if (Number(product.stock || 0) > 0) {
+      return res.status(400).json({ success: false, error: "Ce produit est actuellement en stock et disponible \xE0 la commande." });
+    }
+    if (!Array.isArray(db.stockAlerts)) db.stockAlerts = [];
+    const existing = db.stockAlerts.find(
+      (a) => a.productId === product.id && a.email.toLowerCase() === cleanEmail && a.status === "En attente"
+    );
+    if (existing) {
+      return res.json({ success: true, alreadySubscribed: true, alert: existing });
+    }
+    const alert = {
+      id: `STK-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+      productId: product.id,
+      productName: product.name,
+      email: cleanEmail,
+      status: "En attente",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16)
+    };
+    db.stockAlerts.unshift(alert);
+    saveDatabase(db);
+    res.json({ success: true, alreadySubscribed: false, alert });
+  });
+  app.post("/api/newsletter/subscribe", (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`newsletter:${ip}`, "newsletter", ip, 12, 15 * 60 * 1e3, 15 * 60 * 1e3);
+    if (!rl.allowed) {
+      return res.status(429).json({ success: false, error: "Trop de tentatives r\xE9centes. R\xE9essayez plus tard." });
+    }
+    const { email, name: name2 = "", source = "footer" } = req.body || {};
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: "Adresse email invalide." });
+    }
+    const db = getDatabase();
+    if (!Array.isArray(db.newsletterSubscribers)) db.newsletterSubscribers = [];
+    const existing = db.newsletterSubscribers.find((s) => s.email.toLowerCase() === cleanEmail);
+    const nowStr = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    if (existing && existing.status === "Actif") {
+      return res.json({
+        success: true,
+        alreadySubscribed: true,
+        subscriber: existing,
+        promoCode: "BIENVENUE10"
+      });
+    }
+    if (existing) {
+      existing.status = "Actif";
+      existing.subscribedAt = nowStr;
+      if (name2) existing.name = String(name2).trim().slice(0, 80);
+      saveDatabase(db);
+      return res.json({ success: true, alreadySubscribed: false, subscriber: existing, promoCode: "BIENVENUE10" });
+    }
+    const subscriber = {
+      id: `NWS-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+      email: cleanEmail,
+      name: String(name2 || "").trim().slice(0, 80) || void 0,
+      source: String(source || "footer").slice(0, 40),
+      status: "Actif",
+      subscribedAt: nowStr
+    };
+    db.newsletterSubscribers.unshift(subscriber);
+    saveDatabase(db);
+    res.json({ success: true, alreadySubscribed: false, subscriber, promoCode: "BIENVENUE10" });
+  });
+  app.post("/api/newsletter/unsubscribe", (req, res) => {
+    const cleanEmail = String(req.body?.email || "").trim().toLowerCase();
+    if (!cleanEmail) {
+      return res.status(400).json({ success: false, error: "Adresse email requise." });
+    }
+    const db = getDatabase();
+    const sub = (db.newsletterSubscribers || []).find((s) => s.email.toLowerCase() === cleanEmail);
+    if (sub) {
+      sub.status = "D\xE9sabonn\xE9";
+      saveDatabase(db);
+    }
+    res.json({ success: true });
+  });
+  app.get("/api/account/referral", requireAuth, (req, res) => {
+    const db = getDatabase();
+    const user = db.users.find((u) => u.id === req.authUser.id);
+    if (!user) return res.status(404).json({ success: false, error: "Utilisateur introuvable." });
+    const code = ensureUserReferralCode(user);
+    const userReferrals = (db.referrals || []).filter((r) => r.referrerUserId === user.id);
+    saveDatabase(db);
+    res.json({
+      referralCode: code,
+      loyaltyPoints: Number(user.loyaltyPoints || 0),
+      referralsCount: Number(user.referralsCount || userReferrals.length),
+      rewardPerReferral: 150,
+      friendDiscountPercent: 10,
+      referrals: userReferrals
+    });
+  });
+  app.get("/api/reviews/:productId", (req, res) => {
+    const productId = String(req.params.productId || "");
+    const db = getDatabase();
+    const list = (db.reviews || []).filter((r) => r.productId === productId);
+    res.json(list);
+  });
+  app.post("/api/reviews/:productId", (req, res) => {
+    const ip = getClientIp(req);
+    const rl = checkRateLimit(`reviews:${ip}`, "reviews", ip, 10, 15 * 60 * 1e3, 15 * 60 * 1e3);
+    if (!rl.allowed) {
+      return res.status(429).json({ success: false, error: "Trop d\u2019avis envoy\xE9s r\xE9cemment. Patienter quelques minutes." });
+    }
+    const productId = String(req.params.productId || "");
+    const { rating, author, comment, email } = req.body || {};
+    const numRating = Math.max(1, Math.min(5, Math.round(Number(rating) || 5)));
+    const cleanAuthor = String(author || req.authUser?.email?.split("@")[0] || "").trim().slice(0, 80);
+    const cleanComment = String(comment || "").trim().slice(0, 1e3);
+    const cleanEmail = String(email || req.authUser?.email || "").trim().toLowerCase();
+    if (!cleanAuthor || !cleanComment) {
+      return res.status(400).json({ success: false, error: "Nom et commentaire requis." });
+    }
+    const db = getDatabase();
+    const product = db.products.find((p) => p.id === productId);
+    if (!product) {
+      return res.status(404).json({ success: false, error: "Produit introuvable." });
+    }
+    const verifiedPurchase = (db.orders || []).some((o) => {
+      const hasItem = Array.isArray(o.items) && o.items.some((it) => it.product?.id === productId);
+      if (!hasItem) return false;
+      if (req.authUser && (o.userId === req.authUser.id || o.shippingAddress?.email?.toLowerCase() === req.authUser.email.toLowerCase())) {
+        return true;
+      }
+      if (cleanEmail && o.shippingAddress?.email?.toLowerCase() === cleanEmail) {
+        return true;
+      }
+      return false;
+    });
+    const newReview = {
+      id: `REV-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+      productId,
+      author: cleanAuthor,
+      rating: numRating,
+      comment: cleanComment,
+      date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+      verifiedPurchase
+    };
+    if (!Array.isArray(db.reviews)) db.reviews = [];
+    db.reviews.unshift(newReview);
+    const prevCount = Math.max(0, Number(product.reviewsCount) || 0);
+    const prevRating = Number(product.rating) || 5;
+    const nextCount = prevCount + 1;
+    product.reviewsCount = nextCount;
+    product.rating = Number(((prevRating * prevCount + numRating) / nextCount).toFixed(1));
+    saveDatabase(db);
+    io2.emit("products-updated", db.products);
+    res.json({ success: true, review: newReview, product });
+  });
+  app.get("/api/admin/crm", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      subscribers: db.newsletterSubscribers || [],
+      stockAlerts: db.stockAlerts || [],
+      campaigns: db.emailCampaigns || [],
+      referrals: db.referrals || []
+    });
+  });
+  app.delete("/api/admin/crm/subscribers/:id", requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const db = getDatabase();
+    db.newsletterSubscribers = (db.newsletterSubscribers || []).filter((s) => s.id !== id);
+    saveDatabase(db);
+    res.json({ success: true });
+  });
+  app.post("/api/admin/crm/campaigns", requireAdmin, async (req, res) => {
+    const { subject, heading, body, ctaLabel = "D\xE9couvrir les offres", ctaPath = "/", accentColor = "#1d4ed8" } = req.body || {};
+    const cleanSubject = String(subject || "").trim().slice(0, 160);
+    const cleanHeading = String(heading || cleanSubject).trim().slice(0, 180);
+    const cleanBody = String(body || "").trim().slice(0, 3e3);
+    if (!cleanSubject || !cleanBody) {
+      return res.status(400).json({ success: false, error: "Objet et message de la campagne requis." });
+    }
+    const db = getDatabase();
+    const activeSubs = (db.newsletterSubscribers || []).filter((s) => s.status === "Actif");
+    if (activeSubs.length === 0) {
+      return res.status(400).json({ success: false, error: "Aucun abonn\xE9 actif dans la liste Newsletter." });
+    }
+    const safeColor = /^#[0-9a-fA-F]{6}$/.test(String(accentColor || "")) ? String(accentColor) : "#1d4ed8";
+    const safePath = String(ctaPath || "/").startsWith("/") ? String(ctaPath).slice(0, 120) : "/";
+    const baseUrl = resolveBaseUrl(req, db.webmaster);
+    const nowStr = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    const campaignTpl = {
+      id: "newsletter_campaign",
+      name: `Campagne : ${cleanSubject.slice(0, 42)}`,
+      statusLabel: "Newsletter Officinale",
+      subject: cleanSubject,
+      heading: cleanHeading,
+      body: cleanBody,
+      ctaLabel: String(ctaLabel || "D\xE9couvrir").trim().slice(0, 60),
+      ctaPath: safePath,
+      accentColor: safeColor,
+      footerNote: "Vous recevez ce message suite \xE0 votre inscription \xE0 la newsletter Myrlan Parapharmacie.",
+      enabled: true
+    };
+    for (const sub of activeSubs) {
+      const rendered = renderEmailTemplate(campaignTpl, { patientName: sub.name || "Client(e)" }, baseUrl);
+      let dispatchStatus = hasAuth ? "Envoy\xE9 (SMTP)" : "Mode Aper\xE7u";
+      try {
+        await smtpTransporter.sendMail({
+          from: smtpFromHeader,
+          to: sub.email,
+          subject: rendered.subject,
+          text: rendered.text,
+          html: rendered.html
+        });
+      } catch (err) {
+        console.error("[SMTP] Erreur campagne newsletter:", err?.message || err);
+        dispatchStatus = hasAuth ? "Erreur" : "Mode Aper\xE7u";
+      }
+      db.emailLogs = [
+        {
+          id: `EML-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+          templateId: "newsletter_campaign",
+          templateName: campaignTpl.name,
+          to: sub.email,
+          subject: rendered.subject,
+          status: dispatchStatus,
+          sentAt: nowStr
+        },
+        ...Array.isArray(db.emailLogs) ? db.emailLogs : []
+      ].slice(0, 80);
+    }
+    const campaign = {
+      id: `CMP-${Date.now().toString(36)}`,
+      subject: cleanSubject,
+      heading: cleanHeading,
+      recipientCount: activeSubs.length,
+      sentAt: nowStr,
+      status: hasAuth ? "Envoy\xE9e (SMTP)" : "Mode Aper\xE7u"
+    };
+    if (!Array.isArray(db.emailCampaigns)) db.emailCampaigns = [];
+    db.emailCampaigns.unshift(campaign);
+    saveDatabase(db);
+    res.json({ success: true, campaign, recipientCount: activeSubs.length });
+  });
+  app.get("/api/admin/restock", requireAdmin, (_req, res) => {
+    const db = getDatabase();
+    syncCriticalStockNotifications(db, db.products);
+    saveDatabase(db);
+    const cfg = db.restockConfig || { ...DEFAULT_RESTOCK_CONFIG };
+    const threshold = Math.max(1, Number(cfg.criticalThreshold || 5));
+    const criticalProducts = (db.products || []).filter((p) => Number(p.stock || 0) <= threshold).sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0));
+    res.json({
+      config: cfg,
+      criticalProducts,
+      notifications: db.restockNotifications || [],
+      restockEmails: (db.restockEmails || []).slice(0, 40)
+    });
+  });
+  app.put("/api/admin/restock/config", requireAdmin, (req, res) => {
+    const db = getDatabase();
+    const current = db.restockConfig || { ...DEFAULT_RESTOCK_CONFIG };
+    const body = req.body || {};
+    const nextThreshold = body.criticalThreshold !== void 0 ? Math.max(1, Math.min(100, Math.round(Number(body.criticalThreshold) || 5))) : current.criticalThreshold;
+    const nextTarget = body.targetStock !== void 0 ? Math.max(nextThreshold + 1, Math.min(500, Math.round(Number(body.targetStock) || 25))) : Math.max(nextThreshold + 1, Number(current.targetStock || 25));
+    const cleanEmail = body.supplierEmail !== void 0 ? String(body.supplierEmail).trim().slice(0, 140) : current.supplierEmail;
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: "Adresse email fournisseur invalide." });
+    }
+    const updated = {
+      criticalThreshold: nextThreshold,
+      targetStock: nextTarget,
+      supplierEmail: cleanEmail || DEFAULT_RESTOCK_CONFIG.supplierEmail,
+      supplierName: String(body.supplierName ?? current.supplierName ?? DEFAULT_RESTOCK_CONFIG.supplierName).trim().slice(0, 100),
+      autoNotifyOnOrder: body.autoNotifyOnOrder !== void 0 ? Boolean(body.autoNotifyOnOrder) : current.autoNotifyOnOrder !== false,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+    };
+    db.restockConfig = updated;
+    db.restockNotifications = [];
+    syncCriticalStockNotifications(db, db.products);
+    saveDatabase(db);
+    io2.emit("restock-config-updated", updated);
+    res.json({
+      success: true,
+      config: updated,
+      notifications: db.restockNotifications
+    });
+  });
+  app.post("/api/admin/restock/acknowledge", requireAdmin, (req, res) => {
+    const { notificationId, all } = req.body || {};
+    const db = getDatabase();
+    if (!Array.isArray(db.restockNotifications)) db.restockNotifications = [];
+    if (all) {
+      db.restockNotifications.forEach((n) => {
+        n.acknowledged = true;
+      });
+    } else if (notificationId) {
+      const target = db.restockNotifications.find((n) => n.id === notificationId);
+      if (target) target.acknowledged = true;
+    }
+    saveDatabase(db);
+    io2.emit("restock-notifications-updated", db.restockNotifications);
+    res.json({ success: true, notifications: db.restockNotifications });
+  });
+  app.post("/api/admin/restock/send-email", requireAdmin, async (req, res) => {
+    const { to, supplierName, subject, body, items } = req.body || {};
+    const cleanTo = String(to || "").trim();
+    const cleanSubject = String(subject || "").trim().slice(0, 180);
+    const cleanBody = String(body || "").trim().slice(0, 6e3);
+    const cleanSupplier = String(supplierName || "Grossiste R\xE9partiteur").trim().slice(0, 100);
+    if (!cleanTo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanTo)) {
+      return res.status(400).json({ success: false, error: "Adresse email destinataire invalide." });
+    }
+    if (!cleanSubject || !cleanBody) {
+      return res.status(400).json({ success: false, error: "Objet et contenu du mail requis." });
+    }
+    const normalizedLines = Array.isArray(items) ? items.filter((it) => it && it.productId).map((it) => ({
+      productId: String(it.productId),
+      name: String(it.name || "").slice(0, 140),
+      brand: String(it.brand || "").slice(0, 80),
+      ean: String(it.ean || "").slice(0, 32),
+      currentStock: Math.max(0, Number(it.currentStock) || 0),
+      orderQty: Math.max(1, Math.min(1e3, Math.round(Number(it.orderQty) || 1))),
+      unitPrice: Math.max(0, Number(it.unitPrice) || 0)
+    })) : [];
+    const tableRowsHtml = normalizedLines.map(
+      (line) => `<tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;">${escapeHtmlForEmail(line.name)}<div style="font-size:11px;font-weight:400;color:#64748b;">${escapeHtmlForEmail(line.brand)} \xB7 EAN ${escapeHtmlForEmail(line.ean)}</div></td>
+          <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace;color:#b45309;">${line.currentStock} u.</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace;font-weight:700;color:#0f172a;">+${line.orderQty} u.</td>
+        </tr>`
+    ).join("");
+    const bodyParagraphsHtml = escapeHtmlForEmail(cleanBody).split(/\n{2,}/).map((p) => `<p style="margin:0 0 12px 0;color:#334155;font-size:13px;line-height:1.6;">${p.replace(/\n/g, "<br/>")}</p>`).join("");
+    const html = `<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8" /><title>${escapeHtmlForEmail(cleanSubject)}</title></head>
+<body style="margin:0;padding:24px 12px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+    <tr>
+      <td style="background:#0f172a;padding:18px 24px;color:#ffffff;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#93c5fd;">Myrlan Officine \xB7 Bon de R\xE9approvisionnement</div>
+        <div style="font-size:18px;font-weight:800;margin-top:4px;">${escapeHtmlForEmail(cleanSubject)}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:22px 24px;">
+        ${bodyParagraphsHtml}
+        ${normalizedLines.length > 0 ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:#f8fafc;color:#475569;text-align:left;">
+              <th style="padding:8px 10px;border-bottom:1px solid #e2e8f0;">R\xE9f\xE9rence / EAN</th>
+              <th style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">Stock actuel</th>
+              <th style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">Qt\xE9 command\xE9e</th>
+            </tr>
+          </thead>
+          <tbody>${tableRowsHtml}</tbody>
+        </table>` : ""}
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:14px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#64748b;font-size:11px;">
+        Myrlan Parapharmacie \u2014 15 rue de la R\xE9publique, 69002 Lyon \xB7 \xC9mis par ${escapeHtmlForEmail(req.authUser?.email || "Pharmacien")}
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+    let dispatchStatus = hasAuth ? "Envoy\xE9 (SMTP)" : "Mode Aper\xE7u";
+    try {
+      await smtpTransporter.sendMail({
+        from: smtpFromHeader,
+        to: cleanTo,
+        subject: cleanSubject,
+        text: cleanBody,
+        html
+      });
+    } catch (err) {
+      console.error("[SMTP] Erreur envoi r\xE9approvisionnement:", err?.message || err);
+      dispatchStatus = hasAuth ? "Erreur" : "Mode Aper\xE7u";
+    }
+    const db = getDatabase();
+    const nowStr = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
+    const totalUnits = normalizedLines.reduce((sum, l) => sum + l.orderQty, 0);
+    const record = {
+      id: `RSM-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+      to: cleanTo,
+      supplierName: cleanSupplier,
+      subject: cleanSubject,
+      itemsCount: normalizedLines.length,
+      totalUnits,
+      items: normalizedLines,
+      status: dispatchStatus,
+      sentAt: nowStr,
+      actor: req.authUser?.email || "Admin"
+    };
+    if (!Array.isArray(db.restockEmails)) db.restockEmails = [];
+    db.restockEmails.unshift(record);
+    db.restockEmails = db.restockEmails.slice(0, 50);
+    db.emailLogs = [
+      {
+        id: `EML-${Date.now().toString(36)}-${import_crypto.default.randomBytes(2).toString("hex")}`,
+        templateId: "supplier_restock",
+        templateName: `R\xE9approvisionnement (${normalizedLines.length} r\xE9f.)`,
+        to: cleanTo,
+        subject: cleanSubject,
+        status: dispatchStatus,
+        sentAt: nowStr
+      },
+      ...Array.isArray(db.emailLogs) ? db.emailLogs : []
+    ].slice(0, 80);
+    const orderedIds = new Set(normalizedLines.map((l) => l.productId));
+    if (Array.isArray(db.restockNotifications)) {
+      db.restockNotifications.forEach((n) => {
+        if (orderedIds.has(n.productId)) n.acknowledged = true;
+      });
+    }
+    saveDatabase(db);
+    io2.emit("restock-notifications-updated", db.restockNotifications || []);
+    res.json({ success: true, record, notifications: db.restockNotifications || [] });
+  });
+  app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    const reqPath = normalizeInternalPath(req.path);
+    if (!reqPath) return next();
+    if (reqPath.startsWith("/api/") || reqPath.startsWith("/uploads/") || reqPath.startsWith("/@") || reqPath.startsWith("/src/") || reqPath.startsWith("/node_modules/") || reqPath === "/sitemap.xml" || reqPath === "/robots.txt") {
+      return next();
+    }
+    const db = getDatabase();
+    const redirects = db.webmaster?.redirects || [];
+    const match = redirects.find((r) => r.active && r.fromPath === reqPath);
+    if (match) {
+      const safeTarget = normalizeInternalPath(match.toPath);
+      if (safeTarget && safeTarget !== reqPath) {
+        match.hits = (Number(match.hits) || 0) + 1;
+        saveDatabase(db);
+        return res.redirect(match.statusCode === 302 ? 302 : 301, safeTarget);
+      }
+    }
+    next();
+  });
+  const distPath = import_path.default.resolve(process.cwd(), "dist");
+  const distIndexPath = import_path.default.resolve(distPath, "index.html");
+  const isCompiledServer = import_path.default.basename(process.argv[1] || "") === "server.js";
+  const useProductionStatic = process.env.NODE_ENV === "production" || isCompiledServer && import_fs.default.existsSync(distIndexPath);
+  if (!useProductionStatic) {
     const vite = await (0, import_vite.createServer)({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: false,
+        ws: {
+          server: httpServer,
+          path: "/vite-hmr"
+        }
+      },
       appType: "spa"
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path.default.resolve(process.cwd(), "dist");
-    app.use(import_express.default.static(distPath));
+    app.use(
+      "/assets",
+      import_express.default.static(import_path.default.resolve(distPath, "assets"), {
+        maxAge: "1y",
+        immutable: true
+      })
+    );
+    app.use(
+      import_express.default.static(distPath, {
+        maxAge: "1h",
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith("index.html")) {
+            res.setHeader("Cache-Control", "no-cache");
+          }
+        }
+      })
+    );
     app.get("*", (_req, res) => {
-      res.sendFile(import_path.default.resolve(distPath, "index.html"));
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(distIndexPath);
     });
   }
   httpServer.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`Myrlan Server running on http://0.0.0.0:${PORT} (WebSocket Real-Time, Database, Auth & Storage on Server)`);
+    console.log(`Myrlan Server running on http://0.0.0.0:${PORT}`);
   });
 }
 startServer();
@@ -61237,6 +65479,7 @@ express/lib/response.js:
    *)
 
 negotiator/index.js:
+negotiator/index.js:
   (*!
    * negotiator
    * Copyright(c) 2012 Federico Romero
@@ -61274,6 +65517,32 @@ serve-static/index.js:
    * Copyright(c) 2010 Sencha Inc.
    * Copyright(c) 2011 TJ Holowaychuk
    * Copyright(c) 2014-2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+compressible/index.js:
+  (*!
+   * compressible
+   * Copyright(c) 2013 Jonathan Ong
+   * Copyright(c) 2014 Jeremiah Senkpiel
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+on-headers/index.js:
+  (*!
+   * on-headers
+   * Copyright(c) 2014 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+compression/index.js:
+  (*!
+   * compression
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
    * MIT Licensed
    *)
 
