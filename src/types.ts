@@ -354,6 +354,12 @@ export interface DesignConfig {
   updatedAt?: string;
 }
 
+export interface MaintenanceConfig {
+  enabled: boolean;
+  message: string;
+  updatedAt?: string;
+}
+
 export type EmailTemplateId =
   | 'order_confirmed'
   | 'order_shipped'

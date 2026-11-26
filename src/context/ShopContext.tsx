@@ -14,7 +14,8 @@ import {
   PromoCode,
   SavedAddress,
   ChatSession,
-  DesignConfig
+  DesignConfig,
+  MaintenanceConfig
 } from '../types';
 import { MOCK_PRODUCTS } from '../data/mockProducts';
 import { authFetch, clearAuthToken } from '../utils/authToken';
@@ -52,6 +53,7 @@ interface ShopContextType {
   selectedProductForDetail: Product | null;
   toastMessage: string | null;
   designConfig: DesignConfig;
+  maintenanceConfig: MaintenanceConfig;
 
   navigate: (path: string) => void;
   setSearchQuery: (q: string) => void;
@@ -98,6 +100,7 @@ interface ShopContextType {
   sendChatMessage: (text: string, sender?: 'user' | 'bot' | 'pharmacist', meta?: { visitorName?: string; visitorEmail?: string }) => Promise<void>;
   updateUserProfile: (profile: Partial<UserProfile>, persistServer?: boolean) => Promise<void>;
   saveAddressesToAccount: (addresses: SavedAddress[]) => Promise<void>;
+  updateMaintenanceConfig: (cfg: MaintenanceConfig) => Promise<boolean>;
   showToast: (msg: string) => void;
   currentUser: User | null;
   logoutUser: () => Promise<void>;
@@ -257,6 +260,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showTrustBar: true
   });
 
+  const [maintenanceConfig, setMaintenanceConfig] = useState<MaintenanceConfig>({
+    enabled: false,
+    message: 'Notre officine fait peau neuve pour mieux vous servir. Nous serons de retour très prochainement.'
+  });
+
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -375,6 +383,24 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {});
 
+    fetch('/api/maintenance')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.maintenance) {
+          setMaintenanceConfig(data.maintenance);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/maintenance')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.maintenance) {
+          setMaintenanceConfig(data.maintenance);
+        }
+      })
+      .catch(() => {});
+
     authFetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
@@ -459,6 +485,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.on('design-updated', (updatedDesign: DesignConfig) => {
       if (updatedDesign && updatedDesign.activeHeroId) {
         setDesignConfig(updatedDesign);
+      }
+    });
+
+    socket.on('maintenance-updated', (updatedMaint: MaintenanceConfig) => {
+      if (updatedMaint && typeof updatedMaint === 'object') {
+        setMaintenanceConfig(updatedMaint);
+      }
+    });
+
+    socket.on('maintenance-updated', (updatedMaint: MaintenanceConfig) => {
+      if (updatedMaint && typeof updatedMaint === 'object') {
+        setMaintenanceConfig(updatedMaint);
       }
     });
 
@@ -875,6 +913,27 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await updateUserProfile({ savedAddresses: addresses }, true);
   };
 
+  const updateMaintenanceConfig = useCallback(async (cfg: MaintenanceConfig) => {
+    try {
+      const res = await authFetch('/api/admin/maintenance', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg)
+      });
+      const data = await res.json();
+      if (data.success && data.maintenance) {
+        setMaintenanceConfig(data.maintenance);
+        showToast('Configuration du mode maintenance enregistrée.');
+        return true;
+      }
+      showToast(data.error || 'Erreur lors de la mise à jour du mode maintenance.');
+      return false;
+    } catch {
+      showToast('Erreur réseau lors de la mise à jour.');
+      return false;
+    }
+  }, [showToast]);
+
   return (
     <ShopContext.Provider
       value={{
@@ -910,6 +969,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         selectedProductForDetail,
         toastMessage,
         designConfig,
+        maintenanceConfig,
         navigate,
         setSearchQuery,
         setSelectedCategory,
@@ -948,6 +1008,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendChatMessage,
         updateUserProfile,
         saveAddressesToAccount,
+        updateMaintenanceConfig,
         showToast,
         currentUser,
         logoutUser,

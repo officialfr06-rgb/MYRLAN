@@ -824,6 +824,12 @@ const DEFAULT_RESTOCK_CONFIG = {
   updatedAt: TODAY_ISO
 };
 
+const DEFAULT_MAINTENANCE_CONFIG = {
+  enabled: false,
+  message: 'Notre officine fait peau neuve pour mieux vous servir. Nous serons de retour très prochainement.',
+  updatedAt: TODAY_ISO
+};
+
 let cachedDb: any = null;
 let cachedDbMtimeMs = -1;
 
@@ -858,7 +864,8 @@ function getDatabase() {
       referrals: [],
       restockConfig: { ...DEFAULT_RESTOCK_CONFIG },
       restockNotifications: [],
-      restockEmails: []
+      restockEmails: [],
+      maintenanceConfig: { ...DEFAULT_MAINTENANCE_CONFIG }
     };
     saveDatabase(initialDb);
     return initialDb;
@@ -942,6 +949,15 @@ function getDatabase() {
         ...parsed.restockConfig
       };
     }
+    if (!parsed.maintenanceConfig || typeof parsed.maintenanceConfig !== 'object') {
+      parsed.maintenanceConfig = { ...DEFAULT_MAINTENANCE_CONFIG };
+      dirty = true;
+    } else {
+      parsed.maintenanceConfig = {
+        ...DEFAULT_MAINTENANCE_CONFIG,
+        ...parsed.maintenanceConfig
+      };
+    }
     if (!Array.isArray(parsed.restockNotifications)) { parsed.restockNotifications = []; dirty = true; }
     if (!Array.isArray(parsed.restockEmails)) { parsed.restockEmails = []; dirty = true; }
     for (const u of parsed.users) {
@@ -966,6 +982,7 @@ function getDatabase() {
       restockConfig: { ...DEFAULT_RESTOCK_CONFIG },
       restockNotifications: [],
       restockEmails: [],
+      maintenanceConfig: { ...DEFAULT_MAINTENANCE_CONFIG },
       prescriptions: [],
       contactMessages: [],
       chatSessions: [],
@@ -3126,6 +3143,31 @@ async function startServer() {
     saveDatabase(db);
     io.emit('webmaster-updated', db.webmaster);
     res.json({ success: true, redirects: db.webmaster.redirects });
+  });
+
+  // Maintenance Mode APIs
+  app.get('/api/maintenance', (_req, res) => {
+    const db = getDatabase();
+    res.json({
+      success: true,
+      maintenance: db.maintenanceConfig || DEFAULT_MAINTENANCE_CONFIG
+    });
+  });
+
+  app.put('/api/admin/maintenance', requireAdmin, (req, res) => {
+    const { enabled, message } = req.body || {};
+    const db = getDatabase();
+    const current = db.maintenanceConfig || { ...DEFAULT_MAINTENANCE_CONFIG };
+    const updated = {
+      ...current,
+      enabled: enabled !== undefined ? Boolean(enabled) : current.enabled,
+      message: message !== undefined ? String(message).trim().slice(0, 500) : current.message,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+    db.maintenanceConfig = updated;
+    saveDatabase(db);
+    io.emit('maintenance-updated', updated);
+    res.json({ success: true, maintenance: updated });
   });
 
   app.post('/api/admin/webmaster/check-urls', requireAdmin, (req, res) => {

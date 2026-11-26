@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Globe, FileCode, Search, Link2, ShieldCheck, Download, Copy,
   ExternalLink, CheckCircle, AlertTriangle, Plus, Trash2, RefreshCw,
-  Edit, Save, Play
+  Edit, Save, Play, Wrench
 } from 'lucide-react';
 import { Product, WebmasterConfig, WebmasterRedirect, WebmasterUrlCheck } from '../types';
 import { authFetch } from '../utils/authToken';
+import { useShop } from '../context/ShopContext';
 
 interface AdminWebmasterDashboardProps {
   products: Product[];
@@ -13,7 +14,7 @@ interface AdminWebmasterDashboardProps {
   showToast: (msg: string) => void;
 }
 
-type WebmasterSubTab = 'sitemap' | 'seo' | 'audit' | 'redirects';
+type WebmasterSubTab = 'sitemap' | 'seo' | 'audit' | 'redirects' | 'maintenance';
 
 export const AdminWebmasterDashboard: React.FC<AdminWebmasterDashboardProps> = ({
   products,
@@ -43,6 +44,26 @@ export const AdminWebmasterDashboard: React.FC<AdminWebmasterDashboardProps> = (
   const [urlChecks, setUrlChecks] = useState<WebmasterUrlCheck[]>([]);
   const [checkingUrls, setCheckingUrls] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+
+  const { maintenanceConfig, updateMaintenanceConfig } = useShop();
+  const [localMaintEnabled, setLocalMaintEnabled] = useState(maintenanceConfig.enabled);
+  const [localMaintMessage, setLocalMaintMessage] = useState(maintenanceConfig.message);
+  const [savingMaint, setSavingMaint] = useState(false);
+
+  useEffect(() => {
+    setLocalMaintEnabled(maintenanceConfig.enabled);
+    setLocalMaintMessage(maintenanceConfig.message);
+  }, [maintenanceConfig.enabled, maintenanceConfig.message]);
+
+  const handleSaveMaintenance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingMaint(true);
+    await updateMaintenanceConfig({
+      enabled: localMaintEnabled,
+      message: localMaintMessage
+    });
+    setSavingMaint(false);
+  };
 
   const loadWebmasterData = async () => {
     setLoading(true);
@@ -350,7 +371,8 @@ export const AdminWebmasterDashboard: React.FC<AdminWebmasterDashboardProps> = (
             { id: 'sitemap', label: 'Sitemap & Robots.txt', icon: <Globe className="w-3.5 h-3.5" /> },
             { id: 'seo', label: 'SEO, Balises & Search Console', icon: <Search className="w-3.5 h-3.5" /> },
             { id: 'audit', label: `Audit Catalogue (${auditIssuesCount})`, icon: <ShieldCheck className="w-3.5 h-3.5" /> },
-            { id: 'redirects', label: 'Redirections & Diagnostic', icon: <Link2 className="w-3.5 h-3.5" /> }
+            { id: 'redirects', label: 'Redirections & Diagnostic', icon: <Link2 className="w-3.5 h-3.5" /> },
+            { id: 'maintenance', label: `Mode Maintenance ${maintenanceConfig.enabled ? '(ACTIF)' : ''}`, icon: <Wrench className="w-3.5 h-3.5" /> }
           ].map(tab => (
             <button
               key={tab.id}
@@ -1010,6 +1032,69 @@ export const AdminWebmasterDashboard: React.FC<AdminWebmasterDashboardProps> = (
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* TAB 5: MAINTENANCE MODE CONFIGURATION                              */}
+      {/* ================================================================== */}
+      {subTab === 'maintenance' && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden max-w-2xl mx-auto">
+          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <Wrench className="w-5 h-5 text-blue-600" /> Mode Maintenance de la Boutique
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Activez le mode maintenance pour suspendre temporairement l’accès aux clients. L’équipe admin conserve l’accès complet.
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveMaintenance} className="p-6 space-y-6">
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="space-y-0.5">
+                <div className="text-sm font-bold text-slate-900">Activer le mode maintenance</div>
+                <div className="text-xs text-slate-500">
+                  Les visiteurs verront l'écran de maintenance avec votre message personnalisé.
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={localMaintEnabled}
+                  onChange={(e) => setLocalMaintEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">
+                Message affiché aux visiteurs
+              </label>
+              <textarea
+                rows={4}
+                value={localMaintMessage}
+                onChange={(e) => setLocalMaintMessage(e.target.value)}
+                maxLength={500}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30 leading-relaxed"
+                placeholder="Ex: Notre officine fait peau neuve..."
+              />
+              <div className="text-[11px] text-slate-400 text-right">Max 500 caractères</div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+              <button
+                type="submit"
+                disabled={savingMaint}
+                className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-md transition-colors"
+              >
+                {savingMaint ? 'Enregistrement...' : 'Enregistrer le mode maintenance'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

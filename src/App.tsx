@@ -11,6 +11,7 @@ import { Toast } from './components/Toast';
 import { SeoHeadManager } from './components/SeoHeadManager';
 import { CompareBar } from './components/CompareBar';
 import { useBodyScrollLock } from './utils/scrollLock';
+import { MaintenanceScreen } from './components/MaintenanceScreen';
 
 // Lazy-loaded heavy modules (kept out of initial storefront bundle)
 const AdminDashboard = lazy(() =>
@@ -105,8 +106,15 @@ const StoreContent: React.FC = () => {
     isFaqOpen,
     isLegalOpen,
     isAccountOpen,
-    isCompareOpen
+    isCompareOpen,
+    currentUser,
+    maintenanceConfig
   } = useShop();
+
+  const isAdmin = currentUser?.role === 'admin';
+  if (maintenanceConfig.enabled && currentPath !== '/admin' && !isAdmin) {
+    return <MaintenanceScreen message={maintenanceConfig.message} />;
+  }
 
   const hasOpenOverlay =
     isCartOpen ||
